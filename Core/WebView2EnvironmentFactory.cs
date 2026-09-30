@@ -13,6 +13,8 @@ public sealed class WebView2EnvironmentFactory
     private const string ProductFolderName = "FoxBrowser";
     private const string ProfileFolderName = "Profile";
     private const string LegacyProfileFolderName = "WebView2";
+    private const string ExtensionsFolderName = "Extensions";
+    private const string LegacyExtensionsFolderName = "Extensions";
     private const string ProtectedFolderNoticeMarker = "portable-profile-fallback-notified";
 
     private readonly string _applicationDataRoot = Path.Combine(
@@ -21,6 +23,9 @@ public sealed class WebView2EnvironmentFactory
 
     public string PortableProfilePath => Path.Combine(AppContext.BaseDirectory, ProfileFolderName);
     public string LegacyProfilePath => Path.Combine(_applicationDataRoot, LegacyProfileFolderName);
+    public static string PortableExtensionsPath => Path.Combine(AppContext.BaseDirectory, ExtensionsFolderName);
+    public static string LegacyExtensionsPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), ProductFolderName, LegacyExtensionsFolderName);
     public bool UsingLegacyProfile { get; private set; }
     public string? MigrationError { get; private set; }
 
@@ -88,6 +93,7 @@ public sealed class WebView2EnvironmentFactory
             }
         }
 
+        MigrateLegacyExtensionsIfNeeded();
         return PortableProfilePath;
     }
 
@@ -159,6 +165,32 @@ public sealed class WebView2EnvironmentFactory
             var destinationFile = Path.Combine(destinationDirectory, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(destinationFile)!);
             File.Copy(file, destinationFile, overwrite: false);
+        }
+    }
+
+    private static void MigrateLegacyExtensionsIfNeeded()
+    {
+        if (!Directory.Exists(LegacyExtensionsPath) || !Directory.EnumerateFileSystemEntries(LegacyExtensionsPath).Any())
+            return;
+
+        if (Directory.Exists(PortableExtensionsPath) && Directory.EnumerateFileSystemEntries(PortableExtensionsPath).Any())
+            return;
+
+        try
+        {
+            CopyDirectoryContents(LegacyExtensionsPath, PortableExtensionsPath);
+        }
+        catch (IOException)
+        {
+            // Keep the legacy folder intact. A later startup can retry the migration.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Keep the legacy folder intact and let the normal profile startup continue.
+        }
+        catch (SecurityException)
+        {
+            // Keep the legacy folder intact and let the normal profile startup continue.
         }
     }
 

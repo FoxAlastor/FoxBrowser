@@ -26,8 +26,7 @@ public sealed class ExtensionManager
     private readonly Dictionary<string, ExtensionUiMetadata> _uiMetadata;
     private readonly HashSet<string> _pinnedIds;
 
-    public static string ExtensionsRootPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FoxBrowser", "Extensions");
+    public static string ExtensionsRootPath => WebView2EnvironmentFactory.PortableExtensionsPath;
 
     public ExtensionManager(CoreWebView2Profile profile)
     {
