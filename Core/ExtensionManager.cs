@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO.Compression;
 using System.IO;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
@@ -24,6 +25,9 @@ public sealed class ExtensionManager
     private readonly Dictionary<string, string?> _optionsPages;
     private readonly Dictionary<string, ExtensionUiMetadata> _uiMetadata;
     private readonly HashSet<string> _pinnedIds;
+
+    public static string ExtensionsRootPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FoxBrowser", "Extensions");
 
     public ExtensionManager(CoreWebView2Profile profile)
     {
@@ -61,6 +65,75 @@ public sealed class ExtensionManager
         Extensions.Add(extension);
         RebuildPinned();
         return extension;
+    }
+
+    public async Task<CoreWebView2BrowserExtension> AddArchiveAsync(string archivePath)
+    {
+        if (!File.Exists(archivePath)) throw new FileNotFoundException("Файл extension не знайдено.", archivePath);
+        var extensionName = Path.GetFileNameWithoutExtension(archivePath);
+        var safeName = string.Concat(extensionName.Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : '_'));
+        if (string.IsNullOrWhiteSpace(safeName)) safeName = "extension";
+        var destination = Path.Combine(ExtensionsRootPath, $"{safeName}_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(destination);
+
+        try
+        {
+            await using var input = File.OpenRead(archivePath);
+            using var archive = await OpenZipPayloadAsync(input, archivePath);
+            archive.ExtractToDirectory(destination);
+
+            var manifestFolder = FindManifestFolder(destination);
+            return await AddExtensionAsync(manifestFolder);
+        }
+        catch
+        {
+            try { Directory.Delete(destination, recursive: true); } catch { }
+            throw;
+        }
+    }
+
+    public static void OpenExtensionsFolder()
+    {
+        Directory.CreateDirectory(ExtensionsRootPath);
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"\"{ExtensionsRootPath}\"",
+            UseShellExecute = true
+        });
+    }
+
+    private static string FindManifestFolder(string destination)
+    {
+        var rootManifest = Path.Combine(destination, "manifest.json");
+        if (File.Exists(rootManifest)) return destination;
+        var nested = Directory.EnumerateFiles(destination, "manifest.json", SearchOption.AllDirectories).FirstOrDefault();
+        if (nested is null) throw new InvalidDataException("В архіві не знайдено manifest.json.");
+        return Path.GetDirectoryName(nested)!;
+    }
+
+    private static async Task<ZipArchive> OpenZipPayloadAsync(FileStream input, string archivePath)
+    {
+        if (!archivePath.EndsWith(".crx", StringComparison.OrdinalIgnoreCase))
+            return new ZipArchive(input, ZipArchiveMode.Read, leaveOpen: false);
+
+        var header = new byte[16];
+        var read = await input.ReadAsync(header);
+        if (read < 16 || header[0] != (byte)'C' || header[1] != (byte)'r' || header[2] != (byte)'2' || header[3] != (byte)'4')
+            throw new InvalidDataException("Файл CRX має некоректний заголовок.");
+
+        var version = BitConverter.ToInt32(header, 4);
+        var zipOffset = version switch
+        {
+            2 => 16 + BitConverter.ToInt32(header, 8) + BitConverter.ToInt32(header, 12),
+            3 => 12 + BitConverter.ToInt32(header, 8),
+            _ => throw new InvalidDataException($"Непідтримувана версія CRX: {version}.")
+        };
+        input.Position = zipOffset;
+        var payload = new MemoryStream();
+        await input.CopyToAsync(payload);
+        payload.Position = 0;
+        return new ZipArchive(payload, ZipArchiveMode.Read, leaveOpen: false);
     }
 
     public string? GetOptionsPage(string extensionId) => _optionsPages.TryGetValue(extensionId, out var page) ? page : null;

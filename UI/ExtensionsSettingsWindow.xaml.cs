@@ -15,15 +15,15 @@ public partial class ExtensionsSettingsWindow : Window
 {
     private readonly ExtensionManager _manager;
     private readonly CoreWebView2Environment _environment;
-    private readonly Func<Task> _openStore;
+    private readonly Func<string, Task> _openUrl;
     private WebView2? _optionsView;
 
-    public ExtensionsSettingsWindow(ExtensionManager manager, CoreWebView2Environment environment, Func<Task> openStore, bool extensionsAvailable)
+    public ExtensionsSettingsWindow(ExtensionManager manager, CoreWebView2Environment environment, Func<string, Task> openUrl, bool extensionsAvailable)
     {
         InitializeComponent();
         _manager = manager;
         _environment = environment;
-        _openStore = openStore;
+        _openUrl = openUrl;
         ExtensionList.ItemsSource = _manager.Extensions;
         if (!extensionsAvailable)
         {
@@ -48,6 +48,35 @@ public partial class ExtensionsSettingsWindow : Window
             Dispatcher.BeginInvoke(RefreshPinCheckboxes);
         }
         catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private async void AddArchive_Click(object sender, RoutedEventArgs e)
+    {
+        using var dialog = new Forms.OpenFileDialog
+        {
+            Title = "Виберіть архів extension",
+            Filter = "Extension archive (*.zip;*.crx)|*.zip;*.crx|Усі файли (*.*)|*.*",
+            CheckFileExists = true
+        };
+        var owner = new WindowInteropHelper(this).Handle;
+        if (dialog.ShowDialog(new NativeWindowWrapper(owner)) != Forms.DialogResult.OK) return;
+        try
+        {
+            await _manager.AddArchiveAsync(dialog.FileName);
+            ExtensionsStatus.Text = "Розширення розпаковано у профіль FoxBrowser та підключено.";
+            Dispatcher.BeginInvoke(RefreshPinCheckboxes);
+        }
+        catch (Exception ex) { ShowError($"Не вдалося імпортувати архів: {ex.Message}"); }
+    }
+
+    private void OpenFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            ExtensionManager.OpenExtensionsFolder();
+            ExtensionsStatus.Text = $"Папка розширень: {ExtensionManager.ExtensionsRootPath}";
+        }
+        catch (Exception ex) { ShowError($"Не вдалося відкрити папку розширень: {ex.Message}"); }
     }
 
     private async void Toggle_Click(object sender, RoutedEventArgs e)
@@ -103,8 +132,28 @@ public partial class ExtensionsSettingsWindow : Window
 
     private async void Store_Click(object sender, RoutedEventArgs e)
     {
-        Close();
-        await _openStore();
+        try
+        {
+            Close();
+            await _openUrl("https://chromewebstore.google.com/category/extensions");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Не вдалося відкрити Chrome Web Store: {ex.Message}");
+        }
+    }
+
+    private async void Downloader_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Close();
+            await _openUrl("https://www.crx4chrome.com/crx-downloader/");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Не вдалося відкрити CRX Downloader: {ex.Message}");
+        }
     }
 
     private async void Remove_Click(object sender, RoutedEventArgs e)

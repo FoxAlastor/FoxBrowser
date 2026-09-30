@@ -4,6 +4,7 @@
         Title="FoxBrowser" Width="1180" Height="760" MinWidth="760" MinHeight="480"
         Background="{StaticResource WindowBg}" Foreground="{StaticResource TextPrimary}"
         Closing="Window_Closing" StateChanged="Window_StateChanged"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
         RenderOptions.ClearTypeHint="Enabled">
     <Window.Resources>
@@ -57,7 +58,7 @@
             <Setter Property="BorderBrush" Value="{StaticResource BorderDark}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
-            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Margin" Value="0" />
             <Setter Property="Padding" Value="12,0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
@@ -69,7 +70,7 @@
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="8"
                                 Padding="{TemplateBinding Padding}"
-                                Margin="{TemplateBinding Margin}">
+                                Margin="0,0,6,2">
                             <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
@@ -99,13 +100,9 @@
         <Border DockPanel.Dock="Top" Background="{StaticResource HeaderBg}" Padding="12,10,12,8" BorderBrush="{StaticResource BorderDark}" BorderThickness="0,0,0,1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0,18,0">
-                    <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource AurBlueSoft}" Margin="0,0,9,0">
+                    <Border Width="32" Height="32" CornerRadius="9" Background="{StaticResource AurBlueSoft}">
                         <TextBlock Text="🦊" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="FoxBrowser" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="Bold" />
-                        <TextBlock Text="Focused browsing" Foreground="{StaticResource TextMuted}" FontSize="10" Margin="0,1,0,0" />
-                    </StackPanel>
                 </StackPanel>
                 <Button DockPanel.Dock="Right" Content="＋" ToolTip="Нова вкладка" Click="NewTab_Click" Style="{StaticResource IconButton}" Margin="8,0,0,0" />
                 <TabControl x:Name="TabStrip"

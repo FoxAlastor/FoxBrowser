@@ -125,7 +125,7 @@ public partial class MainWindow : Window
         var window = new ExtensionsSettingsWindow(
             _tabManager.ExtensionManager,
             _tabManager.Environment,
-            () => _tabManager.OpenUrlAsync("https://chromewebstore.google.com/category/extensions"),
+            address => _tabManager!.OpenUrlAsync(address),
             _tabManager.ExtensionsAvailable)
         { Owner = this };
         window.ShowDialog();
