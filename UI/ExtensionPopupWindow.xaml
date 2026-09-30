@@ -1,0 +1,10 @@
+<Window x:Class="FoxBrowser.UI.ExtensionPopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
+        Width="360" Height="520" MaxHeight="600"
+        Background="#202328" AllowsTransparency="False">
+    <Border BorderBrush="#59616D" BorderThickness="1" Background="#202328">
+        <Grid x:Name="PopupHost" />
+    </Border>
+</Window>

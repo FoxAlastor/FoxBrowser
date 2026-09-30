@@ -1,0 +1,44 @@
+<Window x:Class="FoxBrowser.UI.ExtensionsSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Розширення" Width="860" Height="620" MinWidth="560" MinHeight="360"
+        Background="#15171A" Foreground="#F2F4F7">
+    <DockPanel Margin="14">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Магазин розширень" ToolTip="Відкрити Chrome Web Store; встановлення з магазину не підтримується API WebView2" Click="Store_Click" Padding="12,6" />
+            <Button Content="Імпортувати розширення…" Click="Add_Click" Padding="12,6" Margin="8,0,0,0" />
+            <Button Content="Закрити" Click="Close_Click" Padding="12,6" Margin="8,0,0,0" />
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Top" Text="Chrome-сумісні unpacked extensions" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,4" />
+        <TextBlock DockPanel.Dock="Top" Text="Кнопка «Налаштування» відкриває сторінку, вказану в manifest.json: options_ui.page або options_page." Foreground="#AEB4BE" TextWrapping="Wrap" Margin="0,0,0,4" />
+        <TextBlock DockPanel.Dock="Top" Text="Профіль WebView2: папка Profile поруч із FoxBrowser.exe (у захищеній папці Windows використовується стандартний профіль %LOCALAPPDATA%\FoxBrowser\WebView2). WebView2 зберігає реєстрацію розширення, а файли unpacked залишаються у вибраній тобою папці." Foreground="#AEB4BE" TextWrapping="Wrap" Margin="0,0,0,10" />
+        <TextBlock x:Name="ExtensionsStatus" DockPanel.Dock="Top" Foreground="#FFCC66" TextWrapping="Wrap" Margin="0,0,0,8" />
+        <Grid>
+            <ListBox x:Name="ExtensionList" Background="#202328" BorderBrush="#454C57" Foreground="#F2F4F7">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="8">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Id}" FontSize="11" Foreground="#AEB4BE" />
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" IsChecked="{Binding IsEnabled, Mode=OneWay}" Tag="{Binding}" Click="Toggle_Click" Content="Увімкнено" VerticalAlignment="Center" Margin="8,0" />
+                            <CheckBox x:Name="PinCheckBox" Grid.Column="2" Content="Закріпити" Tag="{Binding}" Click="Pin_Click" VerticalAlignment="Center" Margin="8,0" />
+                            <Button Grid.Column="3" Content="Налаштування" Tag="{Binding}" Click="Options_Click" Padding="8,4" Margin="0,0,6,0" />
+                            <Button Grid.Column="4" Content="Видалити" Tag="{Binding}" Click="Remove_Click" Padding="8,4" />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <Grid x:Name="OptionsHost" Visibility="Collapsed" Background="#111317">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Button Grid.Row="0" Content="← Назад до списку розширень" Click="BackToList_Click" HorizontalAlignment="Left" Padding="10,6" Margin="8" Panel.ZIndex="2" />
+                <Grid x:Name="OptionsWebViewHost" Grid.Row="1" />
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>

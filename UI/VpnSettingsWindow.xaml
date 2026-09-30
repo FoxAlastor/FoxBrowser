@@ -1,0 +1,22 @@
+<Window x:Class="FoxBrowser.UI.VpnSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="VPN — WireGuard for Windows" Width="620" Height="430" MinWidth="500" MinHeight="320"
+        Background="#15171A" Foreground="#F2F4F7">
+    <DockPanel Margin="14">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Імпортувати .conf…" Click="Import_Click" Padding="12,6" />
+            <Button Content="Connect" Click="Connect_Click" Padding="12,6" Margin="8,0,0,0" />
+            <Button Content="Disconnect" Click="Disconnect_Click" Padding="12,6" Margin="8,0,0,0" />
+            <Button Content="Закрити" Click="Close_Click" Padding="12,6" Margin="8,0,0,0" />
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Top" Text="VPN через зовнішній WireGuard for Windows" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,5" />
+        <TextBlock DockPanel.Dock="Top" Text="FoxBrowser не вбудовує WireGuard: потрібна окрема офіційна інсталяція WireGuard for Windows." Foreground="#AEB4BE" TextWrapping="Wrap" Margin="0,0,0,12" />
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <TextBlock Text="Статус" Foreground="#AEB4BE" />
+            <TextBlock x:Name="StatusText" Text="Disconnected" FontSize="18" FontWeight="SemiBold" Margin="0,2,0,0" />
+            <TextBlock x:Name="ErrorText" Foreground="#FF8C8C" TextWrapping="Wrap" Margin="0,6,0,0" />
+        </StackPanel>
+        <ListBox x:Name="ProfileList" Background="#202328" BorderBrush="#454C57" Foreground="#F2F4F7" DisplayMemberPath="Name" />
+    </DockPanel>
+</Window>
