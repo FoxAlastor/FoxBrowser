@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -21,19 +22,101 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _watchdogTimer = new() { Interval = TimeSpan.FromSeconds(30) };
     private AudioSessionLabeler? _audioLabeler;
     private bool _updatingDarkModeMenu;
+    private AppSettings _appSettings;
+
+    private const int WmNcRButtonDown = 0x00A4;
+    private const int WmNcRButtonUp = 0x00A5;
+    private const int HtSysMenu = 3;
 
     public MainWindow()
     {
         InitializeComponent();
+        _appSettings = AppSettingsStore.Load();
+        ApplyAppIdentity(_appSettings);
+        SourceInitialized += MainWindow_SourceInitialized;
+        Loaded += MainWindow_Loaded;
+    }
+
+    private void MainWindow_SourceInitialized(object? sender, EventArgs e)
+    {
+        ApplyDarkTitleBar(true);
+        var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+        source?.AddHook(MainWindowWndProc);
+    }
+
+    private IntPtr MainWindowWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if ((msg == WmNcRButtonDown || msg == WmNcRButtonUp) && wParam.ToInt32() == HtSysMenu)
+        {
+            handled = true;
+            if (msg == WmNcRButtonUp)
+                Dispatcher.BeginInvoke(OpenAppIdentityMenu);
+        }
+        return IntPtr.Zero;
+    }
+
+    private void OpenAppIdentityMenu()
+    {
+        var popup = new Popup
+        {
+            Placement = PlacementMode.MousePoint,
+            StaysOpen = false,
+            AllowsTransparency = true,
+            PopupAnimation = PopupAnimation.Fade
+        };
+        var item = new System.Windows.Controls.Button
+        {
+            Content = "Змінити назву й іконку…",
+            Style = (Style)FindResource("FoxMenuButton")
+        };
+        item.Click += (_, _) =>
+        {
+            popup.IsOpen = false;
+            OpenAppSettings();
+        };
+        popup.Child = new Border
+        {
+            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(23, 27, 34)),
+            BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(51, 64, 78)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(8),
+            Child = item
+        };
+        popup.IsOpen = true;
+    }
+
+    private void OpenAppSettings()
+    {
+        var window = new AppSettingsWindow(_appSettings, ApplyAppIdentity) { Owner = this };
+        window.ShowDialog();
+    }
+
+    private void ApplyAppIdentity(AppSettings settings)
+    {
+        _appSettings = settings;
+        var iconPath = ResolveAppIconPath(settings);
+        Title = string.IsNullOrWhiteSpace(settings.AppDisplayName) ? "FoxBrowser" : settings.AppDisplayName;
         try
         {
-            var icoPath = Path.Combine(AppContext.BaseDirectory, "FoxBrowser.ico");
-            if (File.Exists(icoPath))
-                Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri(icoPath, UriKind.Absolute));
+            var image = new System.Windows.Media.Imaging.BitmapImage();
+            image.BeginInit();
+            image.UriSource = new Uri(iconPath, UriKind.Absolute);
+            image.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            image.EndInit();
+            image.Freeze();
+            Icon = image;
         }
         catch { }
-        SourceInitialized += (_, _) => ApplyDarkTitleBar(true);
-        Loaded += MainWindow_Loaded;
+        _tray?.UpdateIdentity(Title, iconPath);
+        _audioLabeler?.UpdateIdentity(Title, iconPath);
+    }
+
+    private static string ResolveAppIconPath(AppSettings settings)
+    {
+        if (!string.IsNullOrWhiteSpace(settings.AppIconPath) && File.Exists(settings.AppIconPath))
+            return settings.AppIconPath;
+        return Path.Combine(AppContext.BaseDirectory, "FoxBrowser.ico");
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -41,6 +124,7 @@ public partial class MainWindow : Window
         try
         {
             _tray = new TrayIconManager(this, ExitApplication);
+            _tray.UpdateIdentity(Title, ResolveAppIconPath(_appSettings));
             var environmentFactory = new WebView2EnvironmentFactory();
             var recoveryMode = false;
             CoreWebView2Environment environment;
@@ -65,10 +149,10 @@ public partial class MainWindow : Window
             _tabManager.ActiveTabStateChanged += (_, _) => Dispatcher.Invoke(RefreshAddressBar);
             DataContext = _tabManager;
             await _tabManager.InitializeAsync();
-            var iconPath = Path.Combine(AppContext.BaseDirectory, "FoxBrowser.ico");
+            var iconPath = ResolveAppIconPath(_appSettings);
             try
             {
-                _audioLabeler = new AudioSessionLabeler((uint)Process.GetCurrentProcess().Id, iconPath);
+                _audioLabeler = new AudioSessionLabeler((uint)Process.GetCurrentProcess().Id, iconPath, Title);
             }
             catch
             {

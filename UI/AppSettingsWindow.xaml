@@ -1,0 +1,34 @@
+<Window x:Class="FoxBrowser.UI.AppSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Назва та іконка FoxBrowser" Width="540" Height="270"
+        MinWidth="480" Background="#15171A" Foreground="#F2F4F7"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="Назва та іконка застосунку" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,18" />
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <TextBlock Text="Назва:" VerticalAlignment="Center" />
+            <TextBox x:Name="NameBox" Grid.Column="1" />
+        </Grid>
+        <Grid Grid.Row="2" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <TextBlock Text="Іконка:" VerticalAlignment="Center" />
+            <TextBlock x:Name="IconPathText" Grid.Column="1" VerticalAlignment="Center" Foreground="#AEB4BE" TextTrimming="CharacterEllipsis" />
+            <Button Grid.Column="2" Content="Обрати іконку…" Click="ChooseIcon_Click" Padding="10,5" Margin="10,0,0,0" />
+        </Grid>
+        <TextBlock Grid.Row="3" Text="PNG і JPG автоматично конвертуються у custom_icon.ico поруч із FoxBrowser.exe." Foreground="#AEB4BE" TextWrapping="Wrap" Margin="0,4,0,0" />
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="Скинути до стандартного" Click="Reset_Click" Padding="10,6" Margin="0,0,8,0" />
+            <Button Content="Скасувати" Click="Cancel_Click" Padding="10,6" Margin="0,0,8,0" />
+            <Button Content="Зберегти" Click="Save_Click" Padding="14,6" />
+        </StackPanel>
+    </Grid>
+</Window>

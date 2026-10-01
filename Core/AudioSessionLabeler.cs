@@ -13,21 +13,30 @@ public sealed class AudioSessionLabeler : IDisposable
 {
     private const uint SnapshotProcess = 0x00000002;
     private readonly uint _rootProcessId;
-    private readonly string _iconPath;
+    private string _displayName;
+    private string _iconPath;
     private readonly MMDeviceEnumerator _devices = new();
     private readonly AudioSessionManager _sessions;
     private readonly System.Threading.Timer _refreshTimer;
     private readonly object _gate = new();
     private bool _disposed;
 
-    public AudioSessionLabeler(uint rootProcessId, string iconPath)
+    public AudioSessionLabeler(uint rootProcessId, string iconPath, string displayName = "FoxBrowser")
     {
         _rootProcessId = rootProcessId;
         _iconPath = iconPath;
+        _displayName = string.IsNullOrWhiteSpace(displayName) ? "FoxBrowser" : displayName;
         var device = _devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         _sessions = device.AudioSessionManager;
         _sessions.OnSessionCreated += OnSessionCreated;
         _refreshTimer = new System.Threading.Timer(_ => RefreshAndLabel(), null, TimeSpan.Zero, TimeSpan.FromSeconds(2));
+    }
+
+    public void UpdateIdentity(string displayName, string iconPath)
+    {
+        _displayName = string.IsNullOrWhiteSpace(displayName) ? "FoxBrowser" : displayName;
+        _iconPath = iconPath;
+        RefreshAndLabel();
     }
 
     private void OnSessionCreated(object sender, IAudioSessionControl nativeSession)
@@ -64,7 +73,7 @@ public sealed class AudioSessionLabeler : IDisposable
         {
             var ownedPids = knownOwnedPids ?? GetFoxBrowserWebViewPids();
             if (!ownedPids.Contains(session.GetProcessID)) return;
-            session.DisplayName = "FoxBrowser";
+            session.DisplayName = _displayName;
             if (File.Exists(_iconPath)) session.IconPath = _iconPath;
         }
         catch { /* A session may close between PID lookup and property update. */ }

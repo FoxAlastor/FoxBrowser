@@ -9,28 +9,22 @@ public sealed class TrayIconManager : IDisposable
     private readonly Forms.NotifyIcon _icon;
     private readonly Window _window;
     private readonly Action _exit;
+    private Icon? _ownedIcon;
 
     public TrayIconManager(Window window, Action exit)
     {
         _window = window;
         _exit = exit;
 
-        Icon? icon = null;
-        try
-        {
-            var icoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "FoxBrowser.ico");
-            if (System.IO.File.Exists(icoPath)) icon = new Icon(icoPath);
-        }
-        catch { }
-
         _icon = new Forms.NotifyIcon
         {
-            Icon = icon ?? SystemIcons.Application,
-            Text = "FoxBrowser",
+            Icon = SystemIcons.Application,
+            Text = window.Title,
             Visible = true,
             ContextMenuStrip = BuildMenu()
         };
         _icon.MouseClick += OnMouseClick;
+        UpdateIdentity(window.Title, System.IO.Path.Combine(AppContext.BaseDirectory, "FoxBrowser.ico"));
     }
 
     public void MinimizeToTray()
@@ -58,6 +52,23 @@ public sealed class TrayIconManager : IDisposable
         _icon.MouseClick -= OnMouseClick;
         _icon.Visible = false;
         _icon.Dispose();
+        _ownedIcon?.Dispose();
+    }
+
+    public void UpdateIdentity(string displayName, string iconPath)
+    {
+        try
+        {
+            Icon? next = null;
+            if (System.IO.File.Exists(iconPath)) next = new Icon(iconPath);
+            var old = _ownedIcon;
+            _ownedIcon = next;
+            _icon.Icon = next ?? SystemIcons.Application;
+            old?.Dispose();
+        }
+        catch { }
+
+        _icon.Text = string.IsNullOrWhiteSpace(displayName) ? "FoxBrowser" : displayName[..Math.Min(63, displayName.Length)];
     }
 
     private void OnMouseClick(object? sender, Forms.MouseEventArgs e)
