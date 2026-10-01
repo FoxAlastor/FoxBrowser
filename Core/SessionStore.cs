@@ -13,6 +13,10 @@ public sealed class TabSnapshot
     public string  Address       { get; init; } = "https://www.google.com";
     public string  Title         { get; init; } = "Нова вкладка";
     public bool    IsAudioOnly   { get; init; }
+    public bool    IsDarkMode    { get; init; }
+    public double  DarkBrightness { get; init; } = 0.72;
+    public double  DarkContrast   { get; init; } = 1.08;
+    public double  DarkSaturation { get; init; } = 0.88;
     public double  ScrollY       { get; init; }
     public double  MediaPosition { get; init; }
     public bool    WasPlaying    { get; init; }
@@ -52,6 +56,10 @@ public static class SessionStore
                 Address       = t.Address,
                 Title         = t.Title,
                 IsAudioOnly   = t.IsAudioOnly,
+                IsDarkMode    = t.IsDarkMode,
+                DarkBrightness = t.DarkBrightness,
+                DarkContrast   = t.DarkContrast,
+                DarkSaturation = t.DarkSaturation,
                 ScrollY       = t.ScrollY,
                 MediaPosition = t.MediaPosition,
                 WasPlaying    = t.WasPlaying,

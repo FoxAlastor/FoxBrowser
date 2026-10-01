@@ -26,6 +26,8 @@ public sealed class TabManager : IAsyncDisposable
     private bool _minimizedMode;
     private bool _navigationInProgress;
     private bool _switchInProgress;
+    private readonly string _blockedElementsPath = Path.Combine(AppContext.BaseDirectory, "blocked-elements.json");
+    private readonly Dictionary<string, List<string>> _blockedElements;
 
     public TabManager(Grid host, CoreWebView2Environment environment, bool extensionsAvailable = true)
     {
@@ -34,6 +36,7 @@ public sealed class TabManager : IAsyncDisposable
         ExtensionsAvailable = extensionsAvailable;
         _view = new WebView2 { Visibility = Visibility.Visible };
         _host.Children.Add(_view);
+        _blockedElements = LoadBlockedElements();
     }
 
     public ObservableCollection<BrowserTab> Tabs { get; } = new();
@@ -64,6 +67,7 @@ public sealed class TabManager : IAsyncDisposable
         _view.CoreWebView2.DocumentTitleChanged += OnDocumentTitleChanged;
         _view.CoreWebView2.IsDocumentPlayingAudioChanged += OnAudioStateChanged;
         _view.CoreWebView2.HistoryChanged += OnHistoryChanged;
+        _view.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
         await RestoreSessionOrDefaultAsync();
     }
 
@@ -90,6 +94,10 @@ public sealed class TabManager : IAsyncDisposable
             {
                 Title = snap.Title,
                 IsAudioOnly = snap.IsAudioOnly,
+                IsDarkMode = snap.IsDarkMode,
+                DarkBrightness = snap.DarkBrightness,
+                DarkContrast = snap.DarkContrast,
+                DarkSaturation = snap.DarkSaturation,
                 ScrollY = snap.ScrollY,
                 MediaPosition = snap.MediaPosition,
                 WasPlaying = snap.WasPlaying,
@@ -168,6 +176,87 @@ public sealed class TabManager : IAsyncDisposable
         await ApplyLightweightPageModeAsync(_audioOnly || _minimizedMode);
     }
 
+    public async Task ToggleDarkModeAsync()
+    {
+        if (ActiveTab is null) return;
+        ActiveTab.IsDarkMode = !ActiveTab.IsDarkMode;
+        await ApplyDarkModeAsync(ActiveTab.IsDarkMode);
+        await SaveSessionAsync();
+    }
+
+    public async Task SetDarkModeParametersAsync(double brightness, double contrast, double saturation)
+    {
+        if (ActiveTab is null) return;
+        ActiveTab.DarkBrightness = Math.Clamp(brightness, 0.45, 1.0);
+        ActiveTab.DarkContrast = Math.Clamp(contrast, 0.8, 1.4);
+        ActiveTab.DarkSaturation = Math.Clamp(saturation, 0.0, 1.2);
+        if (ActiveTab.IsDarkMode) await ApplyDarkModeAsync(true);
+        await SaveSessionAsync();
+    }
+
+    public async Task StartElementPickerAsync()
+    {
+        if (_view.CoreWebView2 is null || ActiveTab is null) return;
+        await _view.CoreWebView2.ExecuteScriptAsync("""
+          (()=>{
+            if(window.__foxElementPicker){window.__foxElementPicker();return;}
+            const previousCursor=document.documentElement.style.cursor;
+            const getSelector=(el)=>{
+              if(el.id)return '#'+CSS.escape(el.id);
+              const parts=[];
+              while(el&&el.nodeType===1&&el!==document.body){
+                let part=el.tagName.toLowerCase();
+                if(el.classList.length)part+='.'+[...el.classList].slice(0,2).map(CSS.escape).join('.');
+                const siblings=[...el.parentElement.children].filter(x=>x.tagName===el.tagName);
+                if(siblings.length>1)part+=`:nth-of-type(${siblings.indexOf(el)+1})`;
+                parts.unshift(part);el=el.parentElement;
+              }
+              return parts.join(' > ');
+            };
+            let last=null;
+            const over=(event)=>{event.stopPropagation();if(last)last.style.outline='';last=event.target;last.style.outline='2px solid #78AFFF';};
+            const click=(event)=>{event.preventDefault();event.stopPropagation();const selector=getSelector(event.target);cleanup();window.chrome?.webview?.postMessage(JSON.stringify({type:'fox-block-element',selector}));};
+            const cleanup=()=>{document.removeEventListener('mouseover',over,true);document.removeEventListener('click',click,true);if(last)last.style.outline='';document.documentElement.style.cursor=previousCursor;window.__foxElementPicker=null;};
+            window.__foxElementPicker=cleanup;document.documentElement.style.cursor='crosshair';document.addEventListener('mouseover',over,true);document.addEventListener('click',click,true);
+          })();
+          """);
+    }
+
+    public string? CurrentHost => GetCurrentHost();
+
+    public IReadOnlyList<string> GetBlockedSelectors()
+    {
+        var host = GetCurrentHost();
+        return host is not null && _blockedElements.TryGetValue(host, out var selectors)
+            ? selectors.ToArray()
+            : Array.Empty<string>();
+    }
+
+    public async Task RemoveBlockedSelectorAsync(string selector)
+    {
+        var host = GetCurrentHost();
+        if (host is null || !_blockedElements.TryGetValue(host, out var selectors)) return;
+        selectors.RemoveAll(x => string.Equals(x, selector, StringComparison.Ordinal));
+        SaveBlockedElements();
+        await ApplyBlockedElementsAsync();
+    }
+
+    public async Task ClearBlockedForCurrentHostAsync()
+    {
+        var host = GetCurrentHost();
+        if (host is null) return;
+        _blockedElements.Remove(host);
+        SaveBlockedElements();
+        await ApplyBlockedElementsAsync();
+    }
+
+    public async Task ClearAllBlockedAsync()
+    {
+        _blockedElements.Clear();
+        SaveBlockedElements();
+        await ApplyBlockedElementsAsync();
+    }
+
     public async Task SetMinimizedModeAsync(bool enabled)
     {
         _minimizedMode = enabled;
@@ -218,6 +307,8 @@ public sealed class TabManager : IAsyncDisposable
         ActiveTab.Title = string.IsNullOrWhiteSpace(_view.CoreWebView2.DocumentTitle) ? "Нова вкладка" : _view.CoreWebView2.DocumentTitle;
         ActiveTabStateChanged?.Invoke(this, EventArgs.Empty);
         await ApplyLightweightPageModeAsync(_audioOnly || _minimizedMode);
+        await ApplyDarkModeAsync(ActiveTab.IsDarkMode);
+        await ApplyBlockedElementsAsync();
         await RestoreActiveStateAsync();
         await SaveSessionAsync();
     }
@@ -240,6 +331,69 @@ public sealed class TabManager : IAsyncDisposable
         ActiveTab.Address = current;
         ActiveTabStateChanged?.Invoke(this, EventArgs.Empty);
         _ = SaveSessionAsync();
+    }
+
+    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            var payload = JsonSerializer.Deserialize<string>(e.WebMessageAsJson);
+            if (string.IsNullOrWhiteSpace(payload)) return;
+            using var document = JsonDocument.Parse(payload);
+            if (!document.RootElement.TryGetProperty("type", out var type) || type.GetString() != "fox-block-element") return;
+            var selector = document.RootElement.GetProperty("selector").GetString();
+            var host = GetCurrentHost();
+            if (string.IsNullOrWhiteSpace(selector) || string.IsNullOrWhiteSpace(host)) return;
+            if (!_blockedElements.TryGetValue(host, out var selectors))
+                _blockedElements[host] = selectors = new List<string>();
+            if (!selectors.Contains(selector, StringComparer.Ordinal)) selectors.Add(selector);
+            SaveBlockedElements();
+            _ = ApplyBlockedElementsAsync();
+        }
+        catch (JsonException) { }
+    }
+
+    private async Task ApplyBlockedElementsAsync()
+    {
+        if (_view.CoreWebView2 is null) return;
+        var host = GetCurrentHost();
+        var selectors = host is not null && _blockedElements.TryGetValue(host, out var savedSelectors)
+            ? savedSelectors
+            : new List<string>();
+        var json = JsonSerializer.Serialize(selectors);
+        var script = """
+          (()=>{const selectors=__SELECTORS__;let s=document.getElementById('fox-blocked-elements');if(!selectors.length){s?.remove();return;}if(!s){s=document.createElement('style');s.id='fox-blocked-elements';(document.head||document.documentElement).appendChild(s);}s.textContent=selectors.map(x=>x+'{display:none!important;}').join('');})();
+          """.Replace("__SELECTORS__", json, StringComparison.Ordinal);
+        try { await _view.CoreWebView2.ExecuteScriptAsync(script); } catch { }
+    }
+
+    private string? GetCurrentHost()
+    {
+        return Uri.TryCreate(ActiveTab?.Address, UriKind.Absolute, out var uri) &&
+               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            ? uri.Host.ToLowerInvariant()
+            : null;
+    }
+
+    private Dictionary<string, List<string>> LoadBlockedElements()
+    {
+        try
+        {
+            if (!File.Exists(_blockedElementsPath)) return new(StringComparer.OrdinalIgnoreCase);
+            return JsonSerializer.Deserialize<Dictionary<string, List<string>>>(File.ReadAllText(_blockedElementsPath))
+                ?? new(StringComparer.OrdinalIgnoreCase);
+        }
+        catch { return new(StringComparer.OrdinalIgnoreCase); }
+    }
+
+    private void SaveBlockedElements()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_blockedElementsPath)!);
+            File.WriteAllText(_blockedElementsPath, JsonSerializer.Serialize(_blockedElements, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch { }
     }
 
     private async Task CaptureActiveStateAsync()
@@ -299,6 +453,37 @@ public sealed class TabManager : IAsyncDisposable
               """
             : "document.getElementById('fox-lightweight')?.remove();";
         await _view.CoreWebView2.ExecuteScriptAsync(script);
+    }
+
+    private async Task ApplyDarkModeAsync(bool enabled)
+    {
+        if (_view.CoreWebView2 is null || ActiveTab is null) return;
+        if (!Uri.TryCreate(ActiveTab.Address, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) return;
+
+        var brightness = ActiveTab.DarkBrightness.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var contrast = ActiveTab.DarkContrast.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var saturation = ActiveTab.DarkSaturation.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var script = enabled
+            ? """
+              (()=>{
+                const root=document.documentElement;
+                if(!root)return;
+                root.classList.add('fox-dark-mode');
+                document.getElementById('fox-dark-mode')?.remove();
+                const s=document.createElement('style');
+                s.id='fox-dark-mode';
+                s.textContent=`html.fox-dark-mode{background:#111!important;color-scheme:dark!important}html.fox-dark-mode body{background-color:#15171b!important;filter:brightness(__BRIGHTNESS__) contrast(__CONTRAST__) saturate(__SATURATION__)!important}html.fox-dark-mode input,html.fox-dark-mode textarea,html.fox-dark-mode select,html.fox-dark-mode button{color-scheme:dark!important}`;
+                (document.head||root).appendChild(s);
+              })();
+              """
+            : """
+              (()=>{document.documentElement?.classList.remove('fox-dark-mode');document.getElementById('fox-dark-mode')?.remove();})();
+              """;
+        script = script.Replace("__BRIGHTNESS__", brightness, StringComparison.Ordinal)
+                     .Replace("__CONTRAST__", contrast, StringComparison.Ordinal)
+                     .Replace("__SATURATION__", saturation, StringComparison.Ordinal);
+        try { await _view.CoreWebView2.ExecuteScriptAsync(script); } catch { }
     }
 
     private static string NormalizeAddress(string value)

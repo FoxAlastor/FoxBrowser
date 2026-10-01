@@ -1,9 +1,17 @@
 <Window x:Class="FoxBrowser.UI.ExtensionPopupWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
         Width="360" Height="520" MaxHeight="600"
         Background="#202328" AllowsTransparency="False">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome
+            GlassFrameThickness="0"
+            CaptionHeight="0"
+            ResizeBorderThickness="0"
+            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
     <Border BorderBrush="#59616D" BorderThickness="1" Background="#202328">
         <Grid x:Name="PopupHost" />
     </Border>

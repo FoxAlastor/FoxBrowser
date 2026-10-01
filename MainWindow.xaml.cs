@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private bool _allowClose;
     private readonly DispatcherTimer _watchdogTimer = new() { Interval = TimeSpan.FromSeconds(30) };
     private AudioSessionLabeler? _audioLabeler;
+    private bool _updatingDarkModeMenu;
 
     public MainWindow()
     {
@@ -109,6 +110,83 @@ public partial class MainWindow : Window
         TabStrip.Items.Refresh();
     }
 
+    private async void DarkMode_Click(object sender, RoutedEventArgs e)
+    {
+        DarkModePopup.IsOpen = false;
+        if (_tabManager is null) return;
+        await _tabManager.ToggleDarkModeAsync();
+        TabStrip.Items.Refresh();
+    }
+
+    private void DarkMode_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        DarkModePopup.IsOpen = true;
+    }
+
+    private async void ElementPicker_Click(object sender, RoutedEventArgs e)
+    {
+        BlockedElementsPopup.IsOpen = false;
+        if (_tabManager is null) return;
+        await _tabManager.StartElementPickerAsync();
+    }
+
+    private void ElementPicker_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        BlockedElementsPopup.IsOpen = true;
+    }
+
+    private void ManageBlockedElements_Click(object sender, RoutedEventArgs e)
+    {
+        BlockedElementsPopup.IsOpen = false;
+        if (_tabManager is null) return;
+        var window = new BlockedElementsWindow(_tabManager) { Owner = this };
+        window.ShowDialog();
+    }
+
+    private async void ClearBlockedSite_Click(object sender, RoutedEventArgs e)
+    {
+        BlockedElementsPopup.IsOpen = false;
+        if (_tabManager is not null) await _tabManager.ClearBlockedForCurrentHostAsync();
+    }
+
+    private async void ClearAllBlocked_Click(object sender, RoutedEventArgs e)
+    {
+        BlockedElementsPopup.IsOpen = false;
+        if (_tabManager is not null) await _tabManager.ClearAllBlockedAsync();
+    }
+
+    private void DarkModeMenu_Opened(object sender, EventArgs e)
+    {
+        if (_tabManager?.ActiveTab is not BrowserTab tab) return;
+        _updatingDarkModeMenu = true;
+        DarkBrightnessSlider.Value = tab.DarkBrightness;
+        DarkContrastSlider.Value = tab.DarkContrast;
+        DarkSaturationSlider.Value = tab.DarkSaturation;
+        _updatingDarkModeMenu = false;
+    }
+
+    private async void DarkModeParameter_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_updatingDarkModeMenu || _tabManager is null) return;
+        await _tabManager.SetDarkModeParametersAsync(
+            DarkBrightnessSlider.Value,
+            DarkContrastSlider.Value,
+            DarkSaturationSlider.Value);
+    }
+
+    private async void ResetDarkMode_Click(object sender, RoutedEventArgs e)
+    {
+        _updatingDarkModeMenu = true;
+        DarkBrightnessSlider.Value = 0.72;
+        DarkContrastSlider.Value = 1.08;
+        DarkSaturationSlider.Value = 0.88;
+        _updatingDarkModeMenu = false;
+        if (_tabManager is not null)
+            await _tabManager.SetDarkModeParametersAsync(0.72, 1.08, 0.88);
+    }
+
     private async Task NavigateFromAddressBarAsync()
     {
         if (_tabManager?.ActiveTab is null) return;
@@ -138,14 +216,28 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(item.PopupPage))
         {
+            System.Windows.MessageBox.Show(
+                this,
+                $"Розширення «{item.Name}» не має popup-вікна у manifest.json. Це нормально для частини extension (наприклад, Shazam). Відкриваю список розширень, де можна перевірити його налаштування.",
+                "Popup розширення",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             Extensions_Click(sender, e);
             return;
         }
 
-        var screenPositionWpf = button.PointToScreen(new System.Windows.Point(0, button.ActualHeight));
-        var screenPosition = new System.Drawing.Point((int)screenPositionWpf.X, (int)screenPositionWpf.Y);
+        var screenPositionDevice = button.PointToScreen(new System.Windows.Point(0, button.ActualHeight));
+        var source = PresentationSource.FromVisual(button);
+        var fromDevice = source?.CompositionTarget?.TransformFromDevice ?? System.Windows.Media.Matrix.Identity;
+        var screenPosition = fromDevice.Transform(screenPositionDevice);
 
-        var popup = new ExtensionPopupWindow(_tabManager.Environment, item.Extension.Id, item.PopupPage, screenPosition)
+        var screen = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point(
+            (int)screenPositionDevice.X, (int)screenPositionDevice.Y));
+        var workAreaTopLeft = fromDevice.Transform(new System.Windows.Point(screen.WorkingArea.Left, screen.WorkingArea.Top));
+        var workAreaBottomRight = fromDevice.Transform(new System.Windows.Point(screen.WorkingArea.Right, screen.WorkingArea.Bottom));
+        var workingArea = new System.Windows.Rect(workAreaTopLeft, workAreaBottomRight);
+
+        var popup = new ExtensionPopupWindow(_tabManager.Environment, item.Extension.Id, item.PopupPage, screenPosition, workingArea)
         {
             Owner = this
         };

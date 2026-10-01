@@ -139,12 +139,52 @@
                                 <Button Tag="{Binding}" Click="PinnedExtension_Click" Width="32" Height="32" Padding="0" Margin="0,0,4,0" ToolTip="{Binding Name}" Style="{StaticResource IconButton}">
                                     <Grid>
                                         <Image Source="{Binding IconPath}" Width="18" Height="18" Stretch="Uniform" />
-                                        <TextBlock Text="{Binding Glyph}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Glyph}"
+                                                   FontWeight="Bold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasIcon}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </Grid>
                                 </Button>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <Button x:Name="DarkModeButton" Content="◐" ToolTip="ЛКМ: увімкнути Dark Mode · ПКМ: налаштування" Click="DarkMode_Click" PreviewMouseRightButtonUp="DarkMode_RightClick" Height="32" Width="36" Padding="0" Margin="0,0,4,0" />
+                    <Popup x:Name="DarkModePopup" PlacementTarget="{Binding ElementName=DarkModeButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade" Opened="DarkModeMenu_Opened">
+                        <Border Background="#171B22" BorderBrush="#33404E" BorderThickness="1" CornerRadius="8" Padding="14" Width="250">
+                            <StackPanel>
+                                <TextBlock Text="Dark Mode" Foreground="{StaticResource TextPrimary}" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <TextBlock Text="Яскравість" Foreground="{StaticResource TextSecondary}" FontSize="11" />
+                                <Slider x:Name="DarkBrightnessSlider" Minimum="0.45" Maximum="1.00" Value="0.72" TickFrequency="0.05" IsSnapToTickEnabled="False" ValueChanged="DarkModeParameter_Changed" Margin="0,2,0,6" />
+                                <TextBlock Text="Контраст" Foreground="{StaticResource TextSecondary}" FontSize="11" />
+                                <Slider x:Name="DarkContrastSlider" Minimum="0.80" Maximum="1.40" Value="1.08" TickFrequency="0.05" IsSnapToTickEnabled="False" ValueChanged="DarkModeParameter_Changed" Margin="0,2,0,6" />
+                                <TextBlock Text="Насиченість" Foreground="{StaticResource TextSecondary}" FontSize="11" />
+                                <Slider x:Name="DarkSaturationSlider" Minimum="0.00" Maximum="1.20" Value="0.88" TickFrequency="0.05" IsSnapToTickEnabled="False" ValueChanged="DarkModeParameter_Changed" Margin="0,2,0,8" />
+                                <Button Content="Скинути параметри" Style="{StaticResource FoxMenuButton}" Click="ResetDarkMode_Click" />
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                    <Button x:Name="ElementPickerButton" Content="✂" ToolTip="ЛКМ: вибрати елемент · ПКМ: керування вирізаними елементами" Click="ElementPicker_Click" PreviewMouseRightButtonUp="ElementPicker_RightClick" Height="32" Width="36" Padding="0" Margin="0,0,4,0" />
+                    <Popup x:Name="BlockedElementsPopup" PlacementTarget="{Binding ElementName=ElementPickerButton}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <Border Background="#171B22" BorderBrush="#33404E" BorderThickness="1" CornerRadius="8" Padding="14" Width="260">
+                            <StackPanel>
+                                <TextBlock Text="Вирізані елементи" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <Button Content="Керувати правилами сайту…" Style="{StaticResource FoxMenuButton}" Click="ManageBlockedElements_Click" />
+                                <Button Content="Очистити правила цього сайту" Style="{StaticResource FoxMenuButton}" Click="ClearBlockedSite_Click" />
+                                <Button Content="Очистити всі правила" Style="{StaticResource FoxMenuButton}" Click="ClearAllBlocked_Click" />
+                            </StackPanel>
+                        </Border>
+                    </Popup>
                     <Button Content="♫" ToolTip="Режим лише аудіо" Click="AudioOnly_Click" Height="32" Width="36" Padding="0" Margin="0,0,4,0" />
                     <Button Content="Розширення" ToolTip="Керування unpacked extensions" Click="Extensions_Click" Height="32" Padding="11,0" />
                 </StackPanel>
