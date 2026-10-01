@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private TabManager? _tabManager;
     private TrayIconManager? _tray;
     private bool _allowClose;
+    private bool _closingAfterSessionSave;
     private readonly DispatcherTimer _watchdogTimer = new() { Interval = TimeSpan.FromSeconds(30) };
     private AudioSessionLabeler? _audioLabeler;
     private bool _updatingDarkModeMenu;
@@ -149,6 +150,7 @@ public partial class MainWindow : Window
             _tabManager.ActiveTabStateChanged += (_, _) => Dispatcher.Invoke(RefreshAddressBar);
             DataContext = _tabManager;
             await _tabManager.InitializeAsync();
+            TabStrip.SelectedItem = _tabManager.ActiveTab;
             var iconPath = ResolveAppIconPath(_appSettings);
             try
             {
@@ -330,15 +332,16 @@ public partial class MainWindow : Window
 
     private async void TabStrip_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (e.Source != TabStrip || TabStrip.SelectedItem is not BrowserTab tab || _tabManager is null) return;
+        if (e.Source != TabStrip || TabStrip.SelectedItem is not BrowserTab tab || _tabManager is null || !_tabManager.SessionReady) return;
         AddressBox.Text = tab.Address;
         await _tabManager.SwitchToTabAsync(tab);
         RefreshAddressBar();
     }
 
-    private void CloseTab_Click(object sender, RoutedEventArgs e)
+    private async void CloseTab_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as System.Windows.Controls.Button)?.Tag is BrowserTab tab) _tabManager?.CloseTab(tab);
+        if ((sender as System.Windows.Controls.Button)?.Tag is BrowserTab tab && _tabManager is not null)
+            await _tabManager.CloseTabAsync(tab);
         RefreshAddressBar();
     }
 
@@ -360,6 +363,14 @@ public partial class MainWindow : Window
         }
         else
         {
+            if (!_closingAfterSessionSave)
+            {
+                e.Cancel = true;
+                _closingAfterSessionSave = true;
+                if (_tabManager is not null) await _tabManager.SaveSessionAsync();
+                Close();
+                return;
+            }
             _watchdogTimer.Stop();
             _tray?.Dispose();
             _audioLabeler?.Dispose();

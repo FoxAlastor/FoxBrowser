@@ -38,6 +38,7 @@ public sealed class Session
 public static class SessionStore
 {
     private static readonly string SessionPath = Path.Combine(AppContext.BaseDirectory, "session.json");
+    private static readonly SemaphoreSlim SaveGate = new(1, 1);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -47,6 +48,7 @@ public static class SessionStore
 
     public static async Task SaveAsync(IEnumerable<BrowserTab> tabs, int activeIndex)
     {
+        await SaveGate.WaitAsync();
         try
         {
             var snapshots = tabs.Select(t => new TabSnapshot
@@ -82,6 +84,10 @@ public static class SessionStore
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[SessionStore] Save failed: {ex.Message}");
+        }
+        finally
+        {
+            SaveGate.Release();
         }
     }
 

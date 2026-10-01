@@ -26,6 +26,7 @@ public sealed class TabManager : IAsyncDisposable
     private bool _minimizedMode;
     private bool _navigationInProgress;
     private bool _switchInProgress;
+    private bool _restoringSession;
     private readonly string _blockedElementsPath = Path.Combine(AppContext.BaseDirectory, "blocked-elements.json");
     private readonly Dictionary<string, List<string>> _blockedElements;
 
@@ -43,6 +44,7 @@ public sealed class TabManager : IAsyncDisposable
     public BrowserTab? ActiveTab { get; private set; }
     public bool IsMinimizedMode => _minimizedMode;
     public bool ExtensionsAvailable { get; private set; }
+    public bool SessionReady { get; private set; }
     public CoreWebView2Environment Environment => _environment;
     public WebView2 View => _view;
     public ExtensionManager? ExtensionManager { get; private set; }
@@ -68,7 +70,17 @@ public sealed class TabManager : IAsyncDisposable
         _view.CoreWebView2.IsDocumentPlayingAudioChanged += OnAudioStateChanged;
         _view.CoreWebView2.HistoryChanged += OnHistoryChanged;
         _view.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
-        await RestoreSessionOrDefaultAsync();
+        _restoringSession = true;
+        try
+        {
+            await RestoreSessionOrDefaultAsync();
+        }
+        finally
+        {
+            _restoringSession = false;
+            SessionReady = true;
+        }
+        await SaveSessionAsync();
     }
 
     public async Task SaveSessionAsync()
@@ -129,7 +141,9 @@ public sealed class TabManager : IAsyncDisposable
             _audioOnly = tab.IsAudioOnly;
             ActiveTabStateChanged?.Invoke(this, EventArgs.Empty);
             _navigationInProgress = true;
+            await UpdateDocumentCreatedScriptAsync();
             core.Navigate(tab.Address);
+            if (!_restoringSession) await SaveSessionAsync();
             await Task.Yield();
         }
         finally { _switchInProgress = false; }
@@ -143,6 +157,7 @@ public sealed class TabManager : IAsyncDisposable
         tab.Address = NormalizeAddress(address);
         if (ActiveTab != tab) { await SwitchToTabAsync(tab); return; }
         _navigationInProgress = true;
+        await UpdateDocumentCreatedScriptAsync();
         core.Navigate(tab.Address);
     }
 
@@ -276,13 +291,20 @@ public sealed class TabManager : IAsyncDisposable
     public void GoForward() { var core = _view.CoreWebView2; if (core?.CanGoForward == true) core.GoForward(); }
     public void Reload() { var core = _view.CoreWebView2; if (core is null) return; _navigationInProgress = true; core.Reload(); }
 
-    public void CloseTab(BrowserTab tab)
+    public async Task CloseTabAsync(BrowserTab tab)
     {
         var index = Tabs.IndexOf(tab);
+        if (index < 0) return;
         Tabs.Remove(tab);
-        if (Tabs.Count == 0) { _ = AddTabAsync(); return; }
-        if (ActiveTab == tab) _ = SwitchToTabAsync(Tabs[Math.Min(index, Tabs.Count - 1)]);
-        _ = SaveSessionAsync();
+        if (Tabs.Count == 0)
+        {
+            await AddTabAsync();
+            return;
+        }
+        if (ActiveTab == tab)
+            await SwitchToTabAsync(Tabs[Math.Min(index, Tabs.Count - 1)]);
+        else
+            await SaveSessionAsync();
     }
 
     public async ValueTask DisposeAsync()
@@ -365,6 +387,47 @@ public sealed class TabManager : IAsyncDisposable
           (()=>{const selectors=__SELECTORS__;let s=document.getElementById('fox-blocked-elements');if(!selectors.length){s?.remove();return;}if(!s){s=document.createElement('style');s.id='fox-blocked-elements';(document.head||document.documentElement).appendChild(s);}s.textContent=selectors.map(x=>x+'{display:none!important;}').join('');})();
           """.Replace("__SELECTORS__", json, StringComparison.Ordinal);
         try { await _view.CoreWebView2.ExecuteScriptAsync(script); } catch { }
+    }
+
+    private async Task UpdateDocumentCreatedScriptAsync()
+    {
+        var core = _view.CoreWebView2;
+        if (core is null) return;
+
+        var host = GetCurrentHost();
+        var selectors = host is not null && _blockedElements.TryGetValue(host, out var savedSelectors)
+            ? savedSelectors
+            : new List<string>();
+        var darkEnabled = ActiveTab?.IsDarkMode == true &&
+                          Uri.TryCreate(ActiveTab.Address, UriKind.Absolute, out var address) &&
+                          (address.Scheme == Uri.UriSchemeHttp || address.Scheme == Uri.UriSchemeHttps);
+        var brightness = (ActiveTab?.DarkBrightness ?? 0.72).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var contrast = (ActiveTab?.DarkContrast ?? 1.08).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var saturation = (ActiveTab?.DarkSaturation ?? 0.88).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var script = """
+          (()=>{
+            const selectors=__SELECTORS__, dark=__DARK__, brightness=__BRIGHTNESS__, contrast=__CONTRAST__, saturation=__SATURATION__;
+            const apply=()=>{
+              const root=document.documentElement;
+              if(!root){setTimeout(apply,0);return;}
+              let darkStyle=document.getElementById('fox-dark-mode');
+              if(!darkStyle){darkStyle=document.createElement('style');darkStyle.id='fox-dark-mode';root.appendChild(darkStyle);}
+              let blockedStyle=document.getElementById('fox-blocked-elements');
+              if(!blockedStyle){blockedStyle=document.createElement('style');blockedStyle.id='fox-blocked-elements';root.appendChild(blockedStyle);}
+              const darkCss=dark?'html{background:#111!important;color-scheme:dark!important}html.fox-dark-mode{background:#111!important;color-scheme:dark!important}html.fox-dark-mode body{background-color:#15171b!important;filter:brightness('+brightness+') contrast('+contrast+') saturate('+saturation+')!important}html.fox-dark-mode input,html.fox-dark-mode textarea,html.fox-dark-mode select,html.fox-dark-mode button{color-scheme:dark!important}':'';
+              darkStyle.textContent=darkCss;
+              blockedStyle.textContent=selectors.map(x=>x+'{display:none!important;}').join('');
+              if(dark) root.classList.add('fox-dark-mode'); else root.classList.remove('fox-dark-mode');
+            };
+            apply();
+          })();
+          """
+            .Replace("__SELECTORS__", JsonSerializer.Serialize(selectors), StringComparison.Ordinal)
+            .Replace("__DARK__", darkEnabled ? "true" : "false", StringComparison.Ordinal)
+            .Replace("__BRIGHTNESS__", brightness, StringComparison.Ordinal)
+            .Replace("__CONTRAST__", contrast, StringComparison.Ordinal)
+            .Replace("__SATURATION__", saturation, StringComparison.Ordinal);
+        try { await core.AddScriptToExecuteOnDocumentCreatedAsync(script); } catch { }
     }
 
     private string? GetCurrentHost()
@@ -470,11 +533,9 @@ public sealed class TabManager : IAsyncDisposable
                 const root=document.documentElement;
                 if(!root)return;
                 root.classList.add('fox-dark-mode');
-                document.getElementById('fox-dark-mode')?.remove();
-                const s=document.createElement('style');
-                s.id='fox-dark-mode';
+                let s=document.getElementById('fox-dark-mode');
+                if(!s){s=document.createElement('style');s.id='fox-dark-mode';(document.head||root).appendChild(s);}
                 s.textContent=`html.fox-dark-mode{background:#111!important;color-scheme:dark!important}html.fox-dark-mode body{background-color:#15171b!important;filter:brightness(__BRIGHTNESS__) contrast(__CONTRAST__) saturate(__SATURATION__)!important}html.fox-dark-mode input,html.fox-dark-mode textarea,html.fox-dark-mode select,html.fox-dark-mode button{color-scheme:dark!important}`;
-                (document.head||root).appendChild(s);
               })();
               """
             : """
