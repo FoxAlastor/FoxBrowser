@@ -54,7 +54,7 @@ public partial class MainWindow : Window
                 // Use a disposable recovery profile so the browser can still start.
                 recoveryMode = true;
                 var recoveryData = Path.Combine(
-                    Path.GetTempPath(), $"FoxBrowser_Recovery_{Environment.ProcessId}_{Guid.NewGuid():N}");
+                    AppContext.BaseDirectory, $"Profile_Recovery_{Environment.ProcessId}_{Guid.NewGuid():N}");
                 Directory.CreateDirectory(recoveryData);
                 environment = await environmentFactory.CreateAsync(recoveryData);
             }

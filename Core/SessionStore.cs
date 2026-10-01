@@ -30,16 +30,14 @@ public sealed class Session
 
 /// <summary>
 /// Saves and loads the browser session (open tabs + per-tab state) to a JSON
-/// file in LocalApplicationData\FoxBrowser\session.json.
+/// file in the portable FoxBrowser folder next to the executable.
 ///
 /// Crash-recovery strategy: the file is re-written after every successful
 /// NavigationCompleted so a hard crash never loses more than one page load.
 /// </summary>
 public static class SessionStore
 {
-    private static readonly string SessionPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "FoxBrowser", "session.json");
+    private static readonly string SessionPath = Path.Combine(AppContext.BaseDirectory, "session.json");
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

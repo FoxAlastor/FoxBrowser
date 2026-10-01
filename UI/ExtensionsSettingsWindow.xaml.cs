@@ -33,7 +33,7 @@ public partial class ExtensionsSettingsWindow : Window
         Loaded += async (_, _) =>
         {
             await _manager.RefreshAsync();
-            Dispatcher.BeginInvoke(RefreshPinCheckboxes);
+            Dispatcher.Invoke(RefreshPinCheckboxes);
         };
     }
 
@@ -45,7 +45,7 @@ public partial class ExtensionsSettingsWindow : Window
         try
         {
             await _manager.AddExtensionAsync(dialog.SelectedPath);
-            Dispatcher.BeginInvoke(RefreshPinCheckboxes);
+            Dispatcher.Invoke(RefreshPinCheckboxes);
         }
         catch (Exception ex) { ShowError(ex.Message); }
     }
@@ -64,7 +64,7 @@ public partial class ExtensionsSettingsWindow : Window
         {
             await _manager.AddArchiveAsync(dialog.FileName);
             ExtensionsStatus.Text = "Розширення розпаковано у профіль FoxBrowser та підключено.";
-            Dispatcher.BeginInvoke(RefreshPinCheckboxes);
+            Dispatcher.Invoke(RefreshPinCheckboxes);
         }
         catch (Exception ex) { ShowError($"Не вдалося імпортувати архів: {ex.Message}"); }
     }

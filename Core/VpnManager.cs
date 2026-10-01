@@ -27,9 +27,7 @@ public sealed class VpnProfile
 
 public sealed class VpnManager
 {
-    private readonly string _profileDirectory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "FoxBrowser", "VPN");
+    private readonly string _profileDirectory = Path.Combine(AppContext.BaseDirectory, "VPN");
     private string? _activeTunnel;
 
     public VpnManager()

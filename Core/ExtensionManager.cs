@@ -19,9 +19,9 @@ public sealed class PinnedExtensionItem
 public sealed class ExtensionManager
 {
     private readonly CoreWebView2Profile _profile;
-    private readonly string _metadataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FoxBrowser", "extension-options.json");
-    private readonly string _uiMetadataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FoxBrowser", "extension-ui.json");
-    private readonly string _pinnedPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FoxBrowser", "pinned-extensions.json");
+    private readonly string _metadataPath = Path.Combine(AppContext.BaseDirectory, "extension-options.json");
+    private readonly string _uiMetadataPath = Path.Combine(AppContext.BaseDirectory, "extension-ui.json");
+    private readonly string _pinnedPath = Path.Combine(AppContext.BaseDirectory, "pinned-extensions.json");
     private readonly Dictionary<string, string?> _optionsPages;
     private readonly Dictionary<string, ExtensionUiMetadata> _uiMetadata;
     private readonly HashSet<string> _pinnedIds;

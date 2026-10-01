@@ -15,7 +15,7 @@
         <TextBlock DockPanel.Dock="Top" Text="Chrome-сумісні unpacked extensions" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,4" />
         <TextBlock DockPanel.Dock="Top" Text="Кнопка «Налаштування» відкриває сторінку, вказану в manifest.json: options_ui.page або options_page." Foreground="#AEB4BE" TextWrapping="Wrap" Margin="0,0,0,4" />
         <TextBlock DockPanel.Dock="Top" Text="WebView2 не підтримує Chrome-only встановлення кнопкою Install. Завантаж ZIP/CRX, імпортуй його тут — FoxBrowser сам розпакує файл у папку профілю та підключить extension." Foreground="#FFCC66" TextWrapping="Wrap" Margin="0,0,0,4" />
-        <TextBlock DockPanel.Dock="Top" Text="Імпортовані файли зберігаються у папці Extensions поруч із FoxBrowser.exe, а реєстрація extension — у portable-профілі WebView2. Старі extension із %LOCALAPPDATA%\FoxBrowser\Extensions переносяться туди автоматично один раз." Foreground="#AEB4BE" TextWrapping="Wrap" Margin="0,0,0,10" />
+        <TextBlock DockPanel.Dock="Top" Text="Імпортовані файли, профіль WebView2 і налаштування extension зберігаються тільки поруч із FoxBrowser.exe у portable-папках." Foreground="#AEB4BE" TextWrapping="Wrap" Margin="0,0,0,10" />
         <TextBlock x:Name="ExtensionsStatus" DockPanel.Dock="Top" Foreground="#FFCC66" TextWrapping="Wrap" Margin="0,0,0,8" />
         <Grid>
             <ListBox x:Name="ExtensionList" Background="#202328" BorderBrush="#454C57" Foreground="#F2F4F7">
