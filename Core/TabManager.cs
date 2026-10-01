@@ -45,6 +45,7 @@ public sealed class TabManager : IAsyncDisposable
     public bool IsMinimizedMode => _minimizedMode;
     public bool ExtensionsAvailable { get; private set; }
     public bool SessionReady { get; private set; }
+    public bool IsElementPickerActive { get; private set; }
     public CoreWebView2Environment Environment => _environment;
     public WebView2 View => _view;
     public ExtensionManager? ExtensionManager { get; private set; }
@@ -137,6 +138,7 @@ public sealed class TabManager : IAsyncDisposable
         try
         {
             if (ActiveTab is not null) await CaptureActiveStateAsync();
+            IsElementPickerActive = false;
             ActiveTab = tab;
             _audioOnly = tab.IsAudioOnly;
             ActiveTabStateChanged?.Invoke(this, EventArgs.Empty);
@@ -212,6 +214,15 @@ public sealed class TabManager : IAsyncDisposable
     public async Task StartElementPickerAsync()
     {
         if (_view.CoreWebView2 is null || ActiveTab is null) return;
+        if (IsElementPickerActive)
+        {
+            await _view.CoreWebView2.ExecuteScriptAsync("window.__foxElementPicker?.();");
+            IsElementPickerActive = false;
+            ActiveTabStateChanged?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+        IsElementPickerActive = true;
+        ActiveTabStateChanged?.Invoke(this, EventArgs.Empty);
         await _view.CoreWebView2.ExecuteScriptAsync("""
           (()=>{
             if(window.__foxElementPicker){window.__foxElementPicker();return;}
@@ -369,7 +380,9 @@ public sealed class TabManager : IAsyncDisposable
             if (!_blockedElements.TryGetValue(host, out var selectors))
                 _blockedElements[host] = selectors = new List<string>();
             if (!selectors.Contains(selector, StringComparer.Ordinal)) selectors.Add(selector);
+            IsElementPickerActive = false;
             SaveBlockedElements();
+            ActiveTabStateChanged?.Invoke(this, EventArgs.Empty);
             _ = ApplyBlockedElementsAsync();
         }
         catch (JsonException) { }

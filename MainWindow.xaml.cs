@@ -147,10 +147,15 @@ public partial class MainWindow : Window
             if (startupNotice is not null)
                 System.Windows.MessageBox.Show(this, startupNotice, "FoxBrowser", MessageBoxButton.OK, MessageBoxImage.Information);
             _tabManager = new TabManager(WebViewHost, environment, !recoveryMode);
-            _tabManager.ActiveTabStateChanged += (_, _) => Dispatcher.Invoke(RefreshAddressBar);
+            _tabManager.ActiveTabStateChanged += (_, _) => Dispatcher.Invoke(() =>
+            {
+                RefreshAddressBar();
+                RefreshModeIndicators();
+            });
             DataContext = _tabManager;
             await _tabManager.InitializeAsync();
             TabStrip.SelectedItem = _tabManager.ActiveTab;
+            RefreshModeIndicators();
             var iconPath = ResolveAppIconPath(_appSettings);
             try
             {
@@ -202,6 +207,7 @@ public partial class MainWindow : Window
         if (_tabManager is null) return;
         await _tabManager.ToggleDarkModeAsync();
         TabStrip.Items.Refresh();
+        RefreshModeIndicators();
     }
 
     private void DarkMode_RightClick(object sender, MouseButtonEventArgs e)
@@ -215,6 +221,7 @@ public partial class MainWindow : Window
         BlockedElementsPopup.IsOpen = false;
         if (_tabManager is null) return;
         await _tabManager.StartElementPickerAsync();
+        RefreshModeIndicators();
     }
 
     private void ElementPicker_RightClick(object sender, MouseButtonEventArgs e)
@@ -336,6 +343,7 @@ public partial class MainWindow : Window
         AddressBox.Text = tab.Address;
         await _tabManager.SwitchToTabAsync(tab);
         RefreshAddressBar();
+        RefreshModeIndicators();
     }
 
     private async void CloseTab_Click(object sender, RoutedEventArgs e)
@@ -397,5 +405,28 @@ public partial class MainWindow : Window
             if (!ReferenceEquals(TabStrip.SelectedItem, _tabManager.ActiveTab)) TabStrip.SelectedItem = _tabManager.ActiveTab;
             AddressBox.Text = _tabManager.ActiveTab.Address;
         }
+    }
+
+    private void RefreshModeIndicators()
+    {
+        if (!IsInitialized) return;
+        var darkActive = _tabManager?.ActiveTab?.IsDarkMode == true;
+        var pickerActive = _tabManager?.IsElementPickerActive == true;
+        var activeBackground = (System.Windows.Media.Brush)FindResource("AurBlueSoft");
+        var activeBorder = (System.Windows.Media.Brush)FindResource("AurBlue");
+        var inactiveBackground = (System.Windows.Media.Brush)FindResource("CardBg");
+        var inactiveBorder = (System.Windows.Media.Brush)FindResource("BorderMedium");
+
+        DarkModeButton.Background = darkActive ? activeBackground : inactiveBackground;
+        DarkModeButton.BorderBrush = darkActive ? activeBorder : inactiveBorder;
+        DarkModeButton.Foreground = darkActive
+            ? (System.Windows.Media.Brush)FindResource("TextPrimary")
+            : (System.Windows.Media.Brush)FindResource("TextSecondary");
+
+        ElementPickerButton.Background = pickerActive ? activeBackground : inactiveBackground;
+        ElementPickerButton.BorderBrush = pickerActive ? activeBorder : inactiveBorder;
+        ElementPickerButton.Foreground = pickerActive
+            ? (System.Windows.Media.Brush)FindResource("TextPrimary")
+            : (System.Windows.Media.Brush)FindResource("TextSecondary");
     }
 }
