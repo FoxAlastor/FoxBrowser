@@ -1,4 +1,5 @@
 # FoxBrowser
+<img width="1174" height="757" alt="FoxBrowser_biC8dmC1Y2" src="https://github.com/user-attachments/assets/dca5f580-bd7e-4a8b-aa2f-864eaa017bfe" />
 
 FoxBrowser — Windows-first браузерний shell на **C# / .NET 8 WPF / WebView2**, оптимізований під фонову роботу з мінімальною кількістю живих renderer-ів.
 
