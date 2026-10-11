@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using FoxBrowser.Core;
@@ -16,6 +17,8 @@ using WpfDragEventArgs = System.Windows.DragEventArgs;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 using WpfMouseEventArgs = System.Windows.Input.MouseEventArgs;
 using WpfPoint = System.Windows.Point;
+using WpfScaleTransform = System.Windows.Media.ScaleTransform;
+using WpfTranslateTransform = System.Windows.Media.TranslateTransform;
 
 namespace FoxBrowser;
 
@@ -31,6 +34,8 @@ public partial class MainWindow : Window
     private AppSettings _appSettings;
     private WpfPoint _tabDragStartPoint;
     private BrowserTab? _tabDragItem;
+    private TabItem? _draggedTabContainer;
+    private TabItem? _dragPreviewTarget;
     private bool _topPanelVisible = true;
 
     private const int WmNcRButtonDown = 0x00A4;
@@ -307,11 +312,12 @@ public partial class MainWindow : Window
         if (_tabManager?.ActiveTab is null) return;
         await _tabManager.NavigateAsync(_tabManager.ActiveTab, AddressBox.Text);
         AddressBox.Text = _tabManager.ActiveTab.Address;
+        AnimateWebViewTransition();
     }
 
-    private void Back_Click(object sender, RoutedEventArgs e) => _tabManager?.GoBack();
-    private void Forward_Click(object sender, RoutedEventArgs e) => _tabManager?.GoForward();
-    private void Reload_Click(object sender, RoutedEventArgs e) => _tabManager?.Reload();
+    private void Back_Click(object sender, RoutedEventArgs e) { AnimateWebViewTransition(); _tabManager?.GoBack(); }
+    private void Forward_Click(object sender, RoutedEventArgs e) { AnimateWebViewTransition(); _tabManager?.GoForward(); }
+    private void Reload_Click(object sender, RoutedEventArgs e) { AnimateWebViewTransition(); _tabManager?.Reload(); }
     private void Extensions_Click(object sender, RoutedEventArgs e)
     {
         if (_tabManager?.ExtensionManager is null) return;
@@ -367,12 +373,45 @@ public partial class MainWindow : Window
             Math.Abs(position.Y - _tabDragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance) return;
         var item = _tabDragItem;
         _tabDragItem = null;
-        System.Windows.DragDrop.DoDragDrop(TabStrip, item, WpfDragDropEffects.Move);
+        _draggedTabContainer = FindTabItem(e.OriginalSource as DependencyObject);
+        if (_draggedTabContainer is not null)
+        {
+            _draggedTabContainer.Opacity = 0.7;
+            _draggedTabContainer.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+            _draggedTabContainer.RenderTransform = new System.Windows.Media.ScaleTransform(0.97, 0.97);
+        }
+        try
+        {
+            System.Windows.DragDrop.DoDragDrop(TabStrip, item, WpfDragDropEffects.Move);
+        }
+        finally
+        {
+            RestoreDraggedTabVisual();
+            ResetDragPreview();
+        }
     }
 
     private void TabStrip_DragOver(object sender, WpfDragEventArgs e)
     {
         e.Effects = e.Data.GetDataPresent(typeof(BrowserTab)) ? WpfDragDropEffects.Move : WpfDragDropEffects.None;
+        if (e.Data.GetDataPresent(typeof(BrowserTab)))
+        {
+            var target = FindTabItem(e.OriginalSource as DependencyObject);
+            if (target is not null && !ReferenceEquals(target, _draggedTabContainer) && !ReferenceEquals(target, _dragPreviewTarget))
+            {
+                ResetDragPreview();
+                _dragPreviewTarget = target;
+                var source = e.Data.GetData(typeof(BrowserTab)) as BrowserTab;
+                var targetTab = target.DataContext as BrowserTab;
+                var sourceIndex = source is null ? -1 : _tabManager?.Tabs.IndexOf(source) ?? -1;
+                var targetIndex = targetTab is null ? -1 : _tabManager?.Tabs.IndexOf(targetTab) ?? -1;
+                var offset = sourceIndex >= 0 && targetIndex >= 0 && sourceIndex < targetIndex ? -6 : 6;
+                var translation = new System.Windows.Media.TranslateTransform();
+                target.RenderTransform = translation;
+                translation.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty,
+                    new DoubleAnimation(offset, new Duration(TimeSpan.FromMilliseconds(120))) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+            }
+        }
         e.Handled = true;
     }
 
@@ -385,6 +424,39 @@ public partial class MainWindow : Window
         var targetIndex = _tabManager.Tabs.IndexOf(target);
         if (targetIndex >= 0) _tabManager.MoveTab(source, targetIndex);
         e.Handled = true;
+    }
+
+    private void RestoreDraggedTabVisual()
+    {
+        if (_draggedTabContainer is null) return;
+        _draggedTabContainer.BeginAnimation(UIElement.OpacityProperty,
+            new DoubleAnimation(0.7, 1, new Duration(TimeSpan.FromMilliseconds(140))) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+        if (_draggedTabContainer.RenderTransform is WpfScaleTransform scale)
+        {
+            scale.BeginAnimation(WpfScaleTransform.ScaleXProperty,
+                new DoubleAnimation(0.97, 1, new Duration(TimeSpan.FromMilliseconds(140))) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+            scale.BeginAnimation(WpfScaleTransform.ScaleYProperty,
+                new DoubleAnimation(0.97, 1, new Duration(TimeSpan.FromMilliseconds(140))) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+        }
+        _draggedTabContainer = null;
+    }
+
+    private void ResetDragPreview()
+    {
+        if (_dragPreviewTarget?.RenderTransform is WpfTranslateTransform translation)
+        {
+            translation.BeginAnimation(WpfTranslateTransform.XProperty,
+                new DoubleAnimation(translation.X, 0, new Duration(TimeSpan.FromMilliseconds(120))) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+        }
+        _dragPreviewTarget = null;
+    }
+
+    private void AnimateWebViewTransition()
+    {
+        WebViewHost.BeginAnimation(UIElement.OpacityProperty, null);
+        WebViewHost.Opacity = 0.85;
+        WebViewHost.BeginAnimation(UIElement.OpacityProperty,
+            new DoubleAnimation(0.85, 1, new Duration(TimeSpan.FromMilliseconds(130))) { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
     }
 
     private static TabItem? FindTabItem(DependencyObject? element)
@@ -437,6 +509,7 @@ public partial class MainWindow : Window
         if (e.Source != TabStrip || TabStrip.SelectedItem is not BrowserTab tab || _tabManager is null || !_tabManager.SessionReady) return;
         AddressBox.Text = tab.Address;
         await _tabManager.SwitchToTabAsync(tab);
+        AnimateWebViewTransition();
         RefreshAddressBar();
         RefreshModeIndicators();
     }

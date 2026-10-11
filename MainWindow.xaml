@@ -8,6 +8,7 @@
         TextOptions.TextFormattingMode="Display"
         RenderOptions.ClearTypeHint="Enabled">
     <Window.Resources>
+        <QuadraticEase x:Key="TabEase" EasingMode="EaseOut" />
         <DataTemplate x:Key="TabTemplate">
             <Grid MinWidth="126" MaxWidth="250" Height="34">
                 <Grid.ColumnDefinitions>
@@ -35,7 +36,33 @@
                         FontWeight="Bold"
                         Background="Transparent"
                         BorderBrush="Transparent"
-                        Foreground="{StaticResource TextMuted}">
+                        Foreground="{StaticResource TextMuted}"
+                        Opacity="0">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Opacity" Value="0" />
+                            <Setter Property="IsHitTestVisible" Value="False" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=TabItem}, Path=IsMouseOver}" Value="True">
+                                    <Setter Property="IsHitTestVisible" Value="True" />
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12" EasingFunction="{StaticResource TabEase}" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.12" EasingFunction="{StaticResource TabEase}" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="CloseBorder" Background="{TemplateBinding Background}" CornerRadius="5">
@@ -64,23 +91,61 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
-                        <Border x:Name="TabBorder"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
+                            <Border x:Name="TabBorder"
+                                Background="#191F28"
+                                BorderBrush="#2B3441"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="8,8,0,0"
                                 Padding="{TemplateBinding Padding}"
-                                Margin="0,0,6,2">
+                                Margin="0,0,6,2"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                            </Border.RenderTransform>
                             <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="TabBorder" Property="Background" Value="#222A35" />
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource BorderMedium}" />
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="TabBorder" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#222A35" Duration="0:0:0.13" EasingFunction="{StaticResource TabEase}" />
+                                            <ColorAnimation Storyboard.TargetName="TabBorder" Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="#46566C" Duration="0:0:0.13" EasingFunction="{StaticResource TabEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="TabBorder" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#191F28" Duration="0:0:0.13" EasingFunction="{StaticResource TabEase}" />
+                                            <ColorAnimation Storyboard.TargetName="TabBorder" Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="#2B3441" Duration="0:0:0.13" EasingFunction="{StaticResource TabEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="TabBorder" Property="Background" Value="#26354B" />
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource AurBlue}" />
+                                <Setter TargetName="TabBorder" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect BlurRadius="7" ShadowDepth="1" Opacity="0.28" Color="#000000" />
+                                    </Setter.Value>
+                                </Setter>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="TabBorder" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#26354B" Duration="0:0:0.14" EasingFunction="{StaticResource TabEase}" />
+                                            <ColorAnimation Storyboard.TargetName="TabBorder" Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="#78AFFF" Duration="0:0:0.14" EasingFunction="{StaticResource TabEase}" />
+                                            <DoubleAnimation Storyboard.TargetName="TabBorder" Storyboard.TargetProperty="(UIElement.Opacity)" To="1" Duration="0:0:0.14" EasingFunction="{StaticResource TabEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="TabBorder" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#191F28" Duration="0:0:0.14" EasingFunction="{StaticResource TabEase}" />
+                                            <ColorAnimation Storyboard.TargetName="TabBorder" Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="#2B3441" Duration="0:0:0.14" EasingFunction="{StaticResource TabEase}" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
