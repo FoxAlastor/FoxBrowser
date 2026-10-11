@@ -11,6 +11,7 @@ public partial class ExtensionPopupWindow : Window
     private readonly CoreWebView2Environment _environment;
     private readonly string _extensionId;
     private readonly string _popupPage;
+    private WebView2? _view;
 
     public ExtensionPopupWindow(
         CoreWebView2Environment environment,
@@ -47,14 +48,21 @@ public partial class ExtensionPopupWindow : Window
     {
         try
         {
-            var view = new WebView2();
-            PopupHost.Children.Add(view);
-            await view.EnsureCoreWebView2Async(_environment);
-            view.CoreWebView2.Navigate($"chrome-extension://{_extensionId}/{_popupPage}");
+            _view = new WebView2();
+            PopupHost.Children.Add(_view);
+            await _view.EnsureCoreWebView2Async(_environment);
+            _view.CoreWebView2.Navigate($"chrome-extension://{_extensionId}/{_popupPage}");
         }
         catch
         {
             Close();
         }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _view?.Dispose();
+        _view = null;
+        base.OnClosed(e);
     }
 }

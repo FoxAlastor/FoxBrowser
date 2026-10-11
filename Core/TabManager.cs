@@ -27,6 +27,7 @@ public sealed class TabManager : IAsyncDisposable
     private bool _navigationInProgress;
     private bool _switchInProgress;
     private bool _restoringSession;
+    private readonly List<BrowserTab> _sessionOrder = new();
     private readonly string _blockedElementsPath = Path.Combine(AppContext.BaseDirectory, "blocked-elements.json");
     private readonly Dictionary<string, List<string>> _blockedElements;
 
@@ -81,13 +82,16 @@ public sealed class TabManager : IAsyncDisposable
             _restoringSession = false;
             SessionReady = true;
         }
+        _sessionOrder.AddRange(Tabs);
         await SaveSessionAsync();
     }
 
     public async Task SaveSessionAsync()
     {
-        var activeIndex = ActiveTab is not null ? Tabs.IndexOf(ActiveTab) : 0;
-        await SessionStore.SaveAsync(Tabs, activeIndex);
+        var orderedTabs = _sessionOrder.Where(Tabs.Contains).Concat(Tabs.Where(tab => !_sessionOrder.Contains(tab)));
+        var snapshotOrder = orderedTabs.ToList();
+        var activeIndex = ActiveTab is not null ? snapshotOrder.IndexOf(ActiveTab) : 0;
+        await SessionStore.SaveAsync(snapshotOrder, activeIndex);
     }
 
     private async Task RestoreSessionOrDefaultAsync()
@@ -125,6 +129,7 @@ public sealed class TabManager : IAsyncDisposable
     {
         var tab = new BrowserTab(NormalizeAddress(address));
         Tabs.Add(tab);
+        if (SessionReady) _sessionOrder.Add(tab);
         await SwitchToTabAsync(tab);
         return tab;
     }
@@ -316,6 +321,15 @@ public sealed class TabManager : IAsyncDisposable
             await SwitchToTabAsync(Tabs[Math.Min(index, Tabs.Count - 1)]);
         else
             await SaveSessionAsync();
+    }
+
+    public void MoveTab(BrowserTab tab, int targetIndex)
+    {
+        var sourceIndex = Tabs.IndexOf(tab);
+        if (sourceIndex < 0 || Tabs.Count < 2) return;
+        targetIndex = Math.Clamp(targetIndex, 0, Tabs.Count - 1);
+        if (sourceIndex == targetIndex) return;
+        Tabs.Move(sourceIndex, targetIndex);
     }
 
     public async ValueTask DisposeAsync()

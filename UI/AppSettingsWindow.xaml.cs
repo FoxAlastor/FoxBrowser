@@ -47,7 +47,12 @@ public partial class AppSettingsWindow : Window
         if (name.Length == 0) name = "FoxBrowser";
         try
         {
-            var settings = new AppSettings { AppDisplayName = name, AppIconPath = _iconPath };
+            var settings = new AppSettings
+            {
+                AppDisplayName = name,
+                AppIconPath = _iconPath,
+                Shortcuts = ShortcutManager.Instance.Shortcuts.ToDictionary(pair => pair.Key, pair => ShortcutManager.Format(pair.Value))
+            };
             AppSettingsStore.Save(settings);
             _apply(settings);
             DialogResult = true;

@@ -8,6 +8,7 @@ public sealed class AppSettings
 {
     public string AppDisplayName { get; set; } = "FoxBrowser";
     public string? AppIconPath { get; set; }
+    public Dictionary<string, string> Shortcuts { get; set; } = new();
 }
 
 public static class AppSettingsStore

@@ -11,6 +11,11 @@ using Microsoft.Web.WebView2.Core;
 using FoxBrowser.Core;
 using FoxBrowser.Native;
 using FoxBrowser.UI;
+using WpfDragDropEffects = System.Windows.DragDropEffects;
+using WpfDragEventArgs = System.Windows.DragEventArgs;
+using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
+using WpfMouseEventArgs = System.Windows.Input.MouseEventArgs;
+using WpfPoint = System.Windows.Point;
 
 namespace FoxBrowser;
 
@@ -24,6 +29,9 @@ public partial class MainWindow : Window
     private AudioSessionLabeler? _audioLabeler;
     private bool _updatingDarkModeMenu;
     private AppSettings _appSettings;
+    private WpfPoint _tabDragStartPoint;
+    private BrowserTab? _tabDragItem;
+    private bool _topPanelVisible = true;
 
     private const int WmNcRButtonDown = 0x00A4;
     private const int WmNcRButtonUp = 0x00A5;
@@ -34,6 +42,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         _appSettings = AppSettingsStore.Load();
         ApplyAppIdentity(_appSettings);
+        PreviewKeyDown += MainWindow_PreviewKeyDown;
         SourceInitialized += MainWindow_SourceInitialized;
         Loaded += MainWindow_Loaded;
     }
@@ -75,6 +84,16 @@ public partial class MainWindow : Window
             popup.IsOpen = false;
             OpenAppSettings();
         };
+        var shortcutsItem = new System.Windows.Controls.Button
+        {
+            Content = "Клавіатурні скорочення…",
+            Style = (Style)FindResource("FoxMenuButton")
+        };
+        shortcutsItem.Click += (_, _) =>
+        {
+            popup.IsOpen = false;
+            Shortcuts_Click(this, new RoutedEventArgs());
+        };
         popup.Child = new Border
         {
             Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(23, 27, 34)),
@@ -82,7 +101,10 @@ public partial class MainWindow : Window
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(8),
-            Child = item
+            Child = new StackPanel
+            {
+                Children = { item, shortcutsItem }
+            }
         };
         popup.IsOpen = true;
     }
@@ -300,6 +322,79 @@ public partial class MainWindow : Window
             _tabManager.ExtensionsAvailable)
         { Owner = this };
         window.ShowDialog();
+    }
+
+    private void Shortcuts_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new ShortcutSettingsWindow { Owner = this };
+        window.ShowDialog();
+    }
+
+    private async void MainWindow_PreviewKeyDown(object sender, WpfKeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var action = ShortcutManager.Instance.FindAction(key, Keyboard.Modifiers);
+        if (action is null) return;
+        e.Handled = true;
+        switch (action)
+        {
+            case ShortcutManager.CloseTab when _tabManager?.ActiveTab is not null:
+                await _tabManager.CloseTabAsync(_tabManager.ActiveTab);
+                RefreshAddressBar();
+                break;
+            case ShortcutManager.NewTab when _tabManager is not null:
+                await _tabManager.AddTabAsync();
+                RefreshAddressBar();
+                break;
+            case ShortcutManager.ToggleTopPanel:
+                _topPanelVisible = !_topPanelVisible;
+                TopPanel.Visibility = _topPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+                break;
+        }
+    }
+
+    private void TabStrip_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _tabDragStartPoint = e.GetPosition(TabStrip);
+        _tabDragItem = FindTabItem(e.OriginalSource as DependencyObject)?.DataContext as BrowserTab;
+    }
+
+    private void TabStrip_PreviewMouseMove(object sender, WpfMouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _tabDragItem is null) return;
+        var position = e.GetPosition(TabStrip);
+        if (Math.Abs(position.X - _tabDragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(position.Y - _tabDragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+        var item = _tabDragItem;
+        _tabDragItem = null;
+        System.Windows.DragDrop.DoDragDrop(TabStrip, item, WpfDragDropEffects.Move);
+    }
+
+    private void TabStrip_DragOver(object sender, WpfDragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(typeof(BrowserTab)) ? WpfDragDropEffects.Move : WpfDragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void TabStrip_Drop(object sender, WpfDragEventArgs e)
+    {
+        if (_tabManager is null || !e.Data.GetDataPresent(typeof(BrowserTab))) return;
+        var source = e.Data.GetData(typeof(BrowserTab)) as BrowserTab;
+        var target = FindTabItem(e.OriginalSource as DependencyObject)?.DataContext as BrowserTab;
+        if (source is null || target is null || ReferenceEquals(source, target)) return;
+        var targetIndex = _tabManager.Tabs.IndexOf(target);
+        if (targetIndex >= 0) _tabManager.MoveTab(source, targetIndex);
+        e.Handled = true;
+    }
+
+    private static TabItem? FindTabItem(DependencyObject? element)
+    {
+        while (element is not null)
+        {
+            if (element is TabItem tabItem) return tabItem;
+            element = System.Windows.Media.VisualTreeHelper.GetParent(element);
+        }
+        return null;
     }
 
     private void PinnedExtension_Click(object sender, RoutedEventArgs e)

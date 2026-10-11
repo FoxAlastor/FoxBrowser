@@ -96,8 +96,9 @@
     </Window.Resources>
 
     <DockPanel>
+        <StackPanel x:Name="TopPanel" DockPanel.Dock="Top">
         <!-- Tab strip -->
-        <Border DockPanel.Dock="Top" Background="{StaticResource HeaderBg}" Padding="12,10,12,8" BorderBrush="{StaticResource BorderDark}" BorderThickness="0,0,0,1">
+        <Border Background="{StaticResource HeaderBg}" Padding="12,10,12,8" BorderBrush="{StaticResource BorderDark}" BorderThickness="0,0,0,1">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0,18,0">
                     <Border Width="32" Height="32" CornerRadius="9" Background="{StaticResource AurBlueSoft}">
@@ -109,6 +110,11 @@
                             ItemsSource="{Binding Tabs}"
                             ItemTemplate="{StaticResource TabTemplate}"
                             SelectionChanged="TabStrip_SelectionChanged"
+                            AllowDrop="True"
+                            PreviewMouseLeftButtonDown="TabStrip_PreviewMouseLeftButtonDown"
+                            PreviewMouseMove="TabStrip_PreviewMouseMove"
+                            DragOver="TabStrip_DragOver"
+                            Drop="TabStrip_Drop"
                             Background="Transparent"
                             BorderThickness="0"
                             Padding="0"
@@ -121,7 +127,7 @@
         </Border>
 
         <!-- Browser controls -->
-        <Border DockPanel.Dock="Top" Background="{StaticResource HeaderBgElevated}" Padding="12,9" BorderBrush="{StaticResource BorderDark}" BorderThickness="0,0,0,1">
+        <Border Background="{StaticResource HeaderBgElevated}" Padding="12,9" BorderBrush="{StaticResource BorderDark}" BorderThickness="0,0,0,1">
             <DockPanel LastChildFill="True">
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
                     <Button Content="←" ToolTip="Назад" Click="Back_Click" Style="{StaticResource IconButton}" />
@@ -187,6 +193,7 @@
                     </Popup>
                     <Button Content="♫" ToolTip="Режим лише аудіо" Click="AudioOnly_Click" Height="32" Width="36" Padding="0" Margin="0,0,4,0" />
                     <Button Content="Розширення" ToolTip="Керування unpacked extensions" Click="Extensions_Click" Height="32" Padding="11,0" />
+                    <Button Content="⌨" ToolTip="Клавіатурні скорочення" Click="Shortcuts_Click" Height="32" Width="36" Padding="0" Margin="4,0,0,0" />
                 </StackPanel>
 
                 <Grid VerticalAlignment="Center">
@@ -199,6 +206,7 @@
                 </Grid>
             </DockPanel>
         </Border>
+        </StackPanel>
 
         <!-- Web content -->
         <Grid x:Name="WebViewHost" Background="#0B0E12">
