@@ -415,14 +415,14 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void TabStrip_Drop(object sender, WpfDragEventArgs e)
+    private async void TabStrip_Drop(object sender, WpfDragEventArgs e)
     {
         if (_tabManager is null || !e.Data.GetDataPresent(typeof(BrowserTab))) return;
         var source = e.Data.GetData(typeof(BrowserTab)) as BrowserTab;
         var target = FindTabItem(e.OriginalSource as DependencyObject)?.DataContext as BrowserTab;
         if (source is null || target is null || ReferenceEquals(source, target)) return;
         var targetIndex = _tabManager.Tabs.IndexOf(target);
-        if (targetIndex >= 0) _tabManager.MoveTab(source, targetIndex);
+        if (targetIndex >= 0) await _tabManager.MoveTabAsync(source, targetIndex);
         e.Handled = true;
     }
 
