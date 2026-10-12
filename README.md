@@ -1,8 +1,21 @@
 # FoxBrowser
+<img width="1174" height="757" alt="FoxBrowser_biC8dmC1Y2" src="https://github.com/user-attachments/assets/dca5f580-bd7e-4a8b-aa2f-864eaa017bfe" />
 
 FoxBrowser — Windows-first браузерний shell на **C# / .NET 8 WPF / WebView2**, оптимізований під фонову роботу з мінімальною кількістю живих renderer-ів.
 
 Правила прихованих елементів зберігаються у `blocked-elements.json` поруч із `FoxBrowser.exe`, щоб portable-версія не створювала для них окремі файли в профілі користувача.
+
+## Завантаження
+
+Готовий portable-білд лежить у **[Releases](https://github.com/FoxAlastor/FoxBrowser/releases/latest)**:
+
+1. Завантажте `.zip` з останнього релізу.
+2. Розпакуйте в будь-яку теку.
+3. Запустіть `FoxBrowser.exe`.
+
+Інсталятор не потрібен. Налаштування (наприклад, `blocked-elements.json`) зберігаються поруч з `.exe`, тож теку можна переносити разом із ними.
+
+**Вимоги:** Windows 10 версії 1809 або новіше та Microsoft Edge WebView2 Runtime (Evergreen). У Windows 11 він уже встановлений, у Windows 10 зазвичай теж.
 
 ## Поточна архітектура пам'яті
 
@@ -45,17 +58,19 @@ FoxBrowser використовує **один WebView2 на весь засто
 3. після отримання audio URL закривати YouTube WebView2;
 4. відтворювати звук через Windows Media Foundation, залишаючи вкладку лише як metadata.
 
-## Запуск у Windows
+## Збірка з вихідників
 
-Потрібні Windows 10 версії 1809 або новіше, .NET 8 SDK та Microsoft Edge WebView2 Runtime Evergreen. У Visual Studio відкрийте `FoxBrowser.sln` і виконайте:
+Потрібні Windows 10 версії 1809 або новіше, .NET 8 SDK та Microsoft Edge WebView2 Runtime Evergreen.
 
 ```powershell
+git clone https://github.com/FoxAlastor/FoxBrowser.git
+cd FoxBrowser
 dotnet restore
 dotnet build -c Debug
-dotnet run --project .\\FoxBrowser.csproj
+dotnet run --project .\FoxBrowser.csproj
 ```
 
-Поточне Linux-середовище агента не має Windows/.NET SDK, тому фінальну компіляцію і вимірювання RAM потрібно виконати на Windows-машині.
+Або відкрийте `FoxBrowser.sln` у Visual Studio.
 
 ## Як вимірювати результат
 
