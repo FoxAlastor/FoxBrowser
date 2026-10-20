@@ -9,12 +9,14 @@ public sealed class TrayIconManager : IDisposable
     private readonly Forms.NotifyIcon _icon;
     private readonly Window _window;
     private readonly Action _exit;
+    private readonly Action _showAddressBar;
     private Icon? _ownedIcon;
 
-    public TrayIconManager(Window window, Action exit)
+    public TrayIconManager(Window window, Action exit, Action showAddressBar)
     {
         _window = window;
         _exit = exit;
+        _showAddressBar = showAddressBar;
 
         _icon = new Forms.NotifyIcon
         {
@@ -80,6 +82,7 @@ public sealed class TrayIconManager : IDisposable
     {
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Показати / сховати", null, (_, _) => ToggleWindow());
+        menu.Items.Add("Показати адресну панель", null, (_, _) => _showAddressBar());
         menu.Items.Add("Вийти", null, (_, _) => _exit());
         return menu;
     }

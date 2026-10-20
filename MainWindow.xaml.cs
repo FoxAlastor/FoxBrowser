@@ -94,6 +94,16 @@ public partial class MainWindow : Window
             popup.IsOpen = false;
             OpenAppSettings();
         };
+        var showAddressItem = new System.Windows.Controls.Button
+        {
+            Content = "Показати адресну панель",
+            Style = (Style)FindResource("FoxMenuButton")
+        };
+        showAddressItem.Click += (_, _) =>
+        {
+            popup.IsOpen = false;
+            ShowAddressBarFromMenu();
+        };
         var shortcutsItem = new System.Windows.Controls.Button
         {
             Content = "Клавіатурні скорочення…",
@@ -113,7 +123,7 @@ public partial class MainWindow : Window
             Padding = new Thickness(8),
             Child = new StackPanel
             {
-                Children = { item, shortcutsItem }
+                Children = { item, shortcutsItem, showAddressItem }
             }
         };
         popup.IsOpen = true;
@@ -156,7 +166,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            _tray = new TrayIconManager(this, ExitApplication);
+            _tray = new TrayIconManager(this, ExitApplication, ShowAddressBarFromMenu);
             _tray.UpdateIdentity(Title, ResolveAppIconPath(_appSettings));
             var environmentFactory = new WebView2EnvironmentFactory();
             var recoveryMode = false;
@@ -348,6 +358,16 @@ public partial class MainWindow : Window
         window.ShowDialog();
     }
 
+    private void ShowAddressBarFromMenu()
+    {
+        if (!_topPanelVisible)
+        {
+            _topPanelVisible = true;
+            TopPanel.Visibility = Visibility.Visible;
+        }
+        SetAddressBarVisibility(true);
+    }
+
     private void ApplyAddressBarSettings(AppSettings settings)
     {
         _appSettings = settings;
@@ -430,6 +450,24 @@ public partial class MainWindow : Window
         if (tab is null) return;
         e.Handled = true;
         OpenTabContextMenu(tab);
+    }
+
+    private void TabStrip_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        ScrollTabs(e.Delta);
+        e.Handled = true;
+    }
+
+    private void TabRow_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        ScrollTabs(e.Delta);
+        e.Handled = true;
+    }
+
+    private void ScrollTabs(int delta)
+    {
+        var panel = TabStrip.Template?.FindName("TabLayoutPanel", TabStrip) as TabShrinkPanel;
+        panel?.ScrollBy(delta);
     }
 
     private void OpenTabContextMenu(BrowserTab tab)

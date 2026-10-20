@@ -44,6 +44,7 @@ public partial class AddressBarSettingsPanel : System.Windows.Controls.UserContr
     private void Mode_Changed(object sender, RoutedEventArgs e)
     {
         if (_loading || TimerRadio is null || TimerRadio.IsChecked != true && ManualRadio.IsChecked != true) return;
+        SecondsBox.IsEnabled = TimerRadio.IsChecked == true;
         Apply();
     }
 

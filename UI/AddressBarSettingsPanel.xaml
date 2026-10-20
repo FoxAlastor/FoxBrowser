@@ -2,8 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <StackPanel>
-        <RadioButton x:Name="ManualRadio" Content="Вручну (за шорткатом)" Margin="0,0,0,6" Checked="Mode_Changed" />
-        <RadioButton x:Name="TimerRadio" Content="Автоматично (за таймером)" Margin="0,0,0,10" Checked="Mode_Changed" />
+        <RadioButton x:Name="ManualRadio" Content="Вручну (за шорткатом)" Foreground="#F2F4F7" Margin="0,0,0,6" Checked="Mode_Changed" />
+        <RadioButton x:Name="TimerRadio" Content="Автоматично (за таймером)" Foreground="#F2F4F7" Margin="0,0,0,10" Checked="Mode_Changed" />
         <Grid Margin="0,0,0,8">
             <Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="90" /></Grid.ColumnDefinitions>
             <TextBlock Text="Ховати через, с" VerticalAlignment="Center" />

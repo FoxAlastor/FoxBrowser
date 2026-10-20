@@ -9,9 +9,10 @@ namespace FoxBrowser;
 
 public sealed class TabShrinkPanel : System.Windows.Controls.Panel
 {
-    private const double MinTabWidth = 72;
+    private const double MinTabWidth = 110;
     private const double MaxTabWidth = 240;
     private const double TabGap = 6;
+    private const double TabHeight = 34;
     private double _horizontalOffset;
     private double _totalWidth;
 
@@ -27,10 +28,11 @@ public sealed class TabShrinkPanel : System.Windows.Controls.Panel
         var count = InternalChildren.Count;
         var tabWidth = count == 0 ? MaxTabWidth : Math.Clamp((width - Math.Max(0, count - 1) * TabGap) / count, MinTabWidth, MaxTabWidth);
         _totalWidth = count * tabWidth + Math.Max(0, count - 1) * TabGap;
+        var height = double.IsInfinity(availableSize.Height) ? TabHeight : Math.Max(TabHeight, availableSize.Height);
         foreach (UIElement child in InternalChildren)
-            child.Measure(new WpfSize(tabWidth, Math.Max(0, availableSize.Height)));
+            child.Measure(new WpfSize(tabWidth, height));
         ClampOffset(width);
-        return new WpfSize(width, double.IsInfinity(availableSize.Height) ? 0 : availableSize.Height);
+        return new WpfSize(width, height);
     }
 
     protected override WpfSize ArrangeOverride(WpfSize finalSize)
@@ -39,11 +41,10 @@ public sealed class TabShrinkPanel : System.Windows.Controls.Panel
         var tabWidth = count == 0 ? MaxTabWidth : Math.Clamp((finalSize.Width - Math.Max(0, count - 1) * TabGap) / count, MinTabWidth, MaxTabWidth);
         _totalWidth = count * tabWidth + Math.Max(0, count - 1) * TabGap;
         ClampOffset(finalSize.Width);
-        EnsureSelectedVisible(finalSize.Width, tabWidth);
         var x = -_horizontalOffset;
         foreach (UIElement child in InternalChildren)
         {
-            child.Arrange(new WpfRect(x, 0, tabWidth, finalSize.Height));
+            child.Arrange(new WpfRect(x, 0, tabWidth, Math.Max(TabHeight, finalSize.Height)));
             x += tabWidth + TabGap;
         }
         return finalSize;
@@ -51,10 +52,15 @@ public sealed class TabShrinkPanel : System.Windows.Controls.Panel
 
     private void OnMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (_totalWidth <= ActualWidth) return;
-        _horizontalOffset = Math.Clamp(_horizontalOffset - e.Delta / 2.0, 0, _totalWidth - ActualWidth);
-        InvalidateArrange();
+        ScrollBy(e.Delta);
         e.Handled = true;
+    }
+
+    public void ScrollBy(int delta)
+    {
+        if (_totalWidth <= ActualWidth) return;
+        _horizontalOffset = Math.Clamp(_horizontalOffset - delta / 2.0, 0, _totalWidth - ActualWidth);
+        InvalidateArrange();
     }
 
     private void EnsureSelectedVisible(double availableWidth, double tabWidth)
