@@ -20,6 +20,8 @@ public sealed class TabSnapshot
     public double  ScrollY       { get; init; }
     public double  MediaPosition { get; init; }
     public bool    WasPlaying    { get; init; }
+    public string? CustomTitle   { get; init; }
+    public string? ColorHex      { get; init; }
 }
 
 public sealed class Session
@@ -63,6 +65,8 @@ public static class SessionStore
                 ScrollY       = t.ScrollY,
                 MediaPosition = t.MediaPosition,
                 WasPlaying    = t.WasPlaying,
+                CustomTitle   = t.CustomTitle,
+                ColorHex      = t.ColorHex,
             }).ToList();
 
             if (snapshots.Count == 0) return;

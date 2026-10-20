@@ -114,6 +114,8 @@ public sealed class TabManager : IAsyncDisposable
                 ScrollY = snap.ScrollY,
                 MediaPosition = snap.MediaPosition,
                 WasPlaying = snap.WasPlaying,
+                CustomTitle = snap.CustomTitle,
+                ColorHex = snap.ColorHex,
             };
             Tabs.Add(tab);
             if (i == session.ActiveTabIndex) activeTab = tab;
@@ -127,6 +129,21 @@ public sealed class TabManager : IAsyncDisposable
         Tabs.Add(tab);
         await SwitchToTabAsync(tab);
         return tab;
+    }
+
+    public async Task<BrowserTab?> DuplicateTab(BrowserTab source)
+    {
+        var index = Tabs.IndexOf(source);
+        if (index < 0) return null;
+        var copy = new BrowserTab(source.Address)
+        {
+            Title = source.Title,
+            CustomTitle = source.CustomTitle,
+            ColorHex = source.ColorHex,
+        };
+        Tabs.Insert(index + 1, copy);
+        await SaveSessionAsync();
+        return copy;
     }
 
     public async Task SwitchToTabAsync(BrowserTab? tab)

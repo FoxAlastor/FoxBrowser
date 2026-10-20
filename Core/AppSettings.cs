@@ -9,6 +9,8 @@ public sealed class AppSettings
     public string AppDisplayName { get; set; } = "FoxBrowser";
     public string? AppIconPath { get; set; }
     public Dictionary<string, string> Shortcuts { get; set; } = new();
+    public string AddressBarHideMode { get; set; } = "Manual";
+    public int AddressBarHideSeconds { get; set; } = 5;
 }
 
 public static class AppSettingsStore
@@ -31,6 +33,8 @@ public static class AppSettingsStore
             if (string.IsNullOrWhiteSpace(settings.AppDisplayName)) settings.AppDisplayName = "FoxBrowser";
             if (!string.IsNullOrWhiteSpace(settings.AppIconPath) && !File.Exists(settings.AppIconPath))
                 settings.AppIconPath = null;
+            settings.AddressBarHideMode = string.Equals(settings.AddressBarHideMode, "Timer", StringComparison.OrdinalIgnoreCase) ? "Timer" : "Manual";
+            settings.AddressBarHideSeconds = Math.Clamp(settings.AddressBarHideSeconds, 2, 60);
             return settings;
         }
         catch

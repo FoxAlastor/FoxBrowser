@@ -37,6 +37,10 @@ public partial class MainWindow : Window
     private TabItem? _draggedTabContainer;
     private TabItem? _dragPreviewTarget;
     private bool _topPanelVisible = true;
+    private bool _addressBarVisible = true;
+    private int _extensionPopupCount;
+    private readonly DispatcherTimer _addressBarTimer = new();
+    private Popup? _tabContextPopup;
 
     private const int WmNcRButtonDown = 0x00A4;
     private const int WmNcRButtonUp = 0x00A5;
@@ -47,6 +51,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         _appSettings = AppSettingsStore.Load();
         ApplyAppIdentity(_appSettings);
+        _addressBarTimer.Tick += (_, _) => HideAddressBarIfAllowed();
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         SourceInitialized += MainWindow_SourceInitialized;
         Loaded += MainWindow_Loaded;
@@ -198,6 +203,7 @@ public partial class MainWindow : Window
             _watchdogTimer.Start();
             BrowserStatus.Visibility = Visibility.Collapsed;
             RefreshAddressBar();
+            ApplyAddressBarSettings(_appSettings);
         }
         catch (Exception ex)
         {
@@ -336,11 +342,59 @@ public partial class MainWindow : Window
         window.ShowDialog();
     }
 
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new SettingsWindow(_appSettings, ApplyAppIdentity, ApplyAddressBarSettings) { Owner = this };
+        window.ShowDialog();
+    }
+
+    private void ApplyAddressBarSettings(AppSettings settings)
+    {
+        _appSettings = settings;
+        _appSettings.AddressBarHideMode = string.Equals(settings.AddressBarHideMode, "Timer", StringComparison.OrdinalIgnoreCase) ? "Timer" : "Manual";
+        _appSettings.AddressBarHideSeconds = Math.Clamp(settings.AddressBarHideSeconds, 2, 60);
+        _addressBarTimer.Stop();
+        _addressBarTimer.Interval = TimeSpan.FromSeconds(_appSettings.AddressBarHideSeconds);
+        if (_appSettings.AddressBarHideMode == "Timer") ResetAddressBarTimer();
+    }
+
+    private void SetAddressBarVisibility(bool visible)
+    {
+        _addressBarVisible = visible;
+        AddressRow.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        AddressHotStrip.Visibility = !visible && _topPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (visible) ResetAddressBarTimer();
+        else _addressBarTimer.Stop();
+    }
+
+    private void ResetAddressBarTimer()
+    {
+        _addressBarTimer.Stop();
+        if (_appSettings.AddressBarHideMode == "Timer" && _addressBarVisible && _topPanelVisible)
+            _addressBarTimer.Start();
+    }
+
+    private void HideAddressBarIfAllowed()
+    {
+        if (!_topPanelVisible || !_addressBarVisible || _appSettings.AddressBarHideMode != "Timer") return;
+        if (AddressRow.IsMouseOver || AddressRow.IsKeyboardFocusWithin || DarkModePopup.IsOpen || BlockedElementsPopup.IsOpen || _extensionPopupCount > 0 || _tabDragItem is not null || _draggedTabContainer is not null)
+        {
+            ResetAddressBarTimer();
+            return;
+        }
+        SetAddressBarVisibility(false);
+    }
+
+    private void AddressRow_MouseMove(object sender, WpfMouseEventArgs e) => ResetAddressBarTimer();
+    private void AddressRow_KeyDown(object sender, WpfKeyEventArgs e) => ResetAddressBarTimer();
+    private void AddressHotStrip_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) => SetAddressBarVisibility(true);
+
     private async void MainWindow_PreviewKeyDown(object sender, WpfKeyEventArgs e)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         var action = ShortcutManager.Instance.FindAction(key, Keyboard.Modifiers);
         if (action is null) return;
+        if (action == ShortcutManager.ToggleAddressBar && !_topPanelVisible) return;
         e.Handled = true;
         switch (action)
         {
@@ -355,6 +409,11 @@ public partial class MainWindow : Window
             case ShortcutManager.ToggleTopPanel:
                 _topPanelVisible = !_topPanelVisible;
                 TopPanel.Visibility = _topPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+                AddressHotStrip.Visibility = _topPanelVisible && !_addressBarVisible ? Visibility.Visible : Visibility.Collapsed;
+                if (_topPanelVisible) ResetAddressBarTimer(); else _addressBarTimer.Stop();
+                break;
+            case ShortcutManager.ToggleAddressBar when _topPanelVisible:
+                SetAddressBarVisibility(!_addressBarVisible);
                 break;
         }
     }
@@ -363,6 +422,82 @@ public partial class MainWindow : Window
     {
         _tabDragStartPoint = e.GetPosition(TabStrip);
         _tabDragItem = FindTabItem(e.OriginalSource as DependencyObject)?.DataContext as BrowserTab;
+    }
+
+    private void TabStrip_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var tab = FindTabItem(e.OriginalSource as DependencyObject)?.DataContext as BrowserTab;
+        if (tab is null) return;
+        e.Handled = true;
+        OpenTabContextMenu(tab);
+    }
+
+    private void OpenTabContextMenu(BrowserTab tab)
+    {
+        _tabContextPopup?.SetCurrentValue(Popup.IsOpenProperty, false);
+        var menu = new StackPanel();
+        void AddItem(string text, Action action)
+        {
+            var button = new System.Windows.Controls.Button { Content = text, Style = (Style)FindResource("FoxMenuButton") };
+            button.Click += (_, _) => { _tabContextPopup!.IsOpen = false; action(); };
+            menu.Children.Add(button);
+        }
+        AddItem("Дублювати", () => _ = DuplicateTabFromMenuAsync(tab));
+        AddItem("Копіювати посилання", () => _ = CopyTabAddressAsync(tab.Address));
+        AddItem("Перейменувати…", () => RenameTabFromMenu(tab));
+        var colorRow = new WrapPanel { Margin = new Thickness(8, 4, 8, 2) };
+        foreach (var color in new[] { "#FF6B6B", "#FFA94D", "#FFD43B", "#69DB7C", "#3BC9DB", "#78AFFF", "#B197FC", "#F783AC" })
+        {
+            var swatch = new System.Windows.Controls.Button
+            {
+                Width = 22, Height = 22, Margin = new Thickness(2), Padding = new Thickness(0),
+                Background = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color)),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.White),
+                BorderThickness = new Thickness(1), ToolTip = color
+            };
+            swatch.Click += (_, _) => { tab.ColorHex = color; _tabContextPopup!.IsOpen = false; _ = _tabManager?.SaveSessionAsync(); };
+            colorRow.Children.Add(swatch);
+        }
+        var noColor = new System.Windows.Controls.Button { Content = "Без кольору", Style = (Style)FindResource("FoxMenuButton") };
+        noColor.Click += (_, _) => { tab.ColorHex = null; _tabContextPopup!.IsOpen = false; _ = _tabManager?.SaveSessionAsync(); };
+        menu.Children.Add(colorRow);
+        menu.Children.Add(noColor);
+        _tabContextPopup = new Popup
+        {
+            Placement = PlacementMode.MousePoint, StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade,
+            Child = new Border
+            {
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(23, 27, 34)),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(51, 64, 78)),
+                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(8), Child = menu
+            }
+        };
+        _tabContextPopup.IsOpen = true;
+    }
+
+    private async Task DuplicateTabFromMenuAsync(BrowserTab source)
+    {
+        if (_tabManager is null) return;
+        var selected = TabStrip.SelectedItem;
+        await _tabManager.DuplicateTab(source);
+        if (selected is not null) TabStrip.SelectedItem = selected;
+    }
+
+    private async Task CopyTabAddressAsync(string text)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try { System.Windows.Clipboard.SetDataObject(text, true); return; }
+            catch (System.Runtime.InteropServices.COMException) when (attempt < 2) { await Task.Delay(50); }
+        }
+    }
+
+    private void RenameTabFromMenu(BrowserTab tab)
+    {
+        var window = new TabRenameWindow(tab.CustomTitle ?? tab.Title) { Owner = this };
+        if (window.ShowDialog() != true) return;
+        tab.CustomTitle = window.CustomTitle;
+        _ = _tabManager?.SaveSessionAsync();
     }
 
     private void TabStrip_PreviewMouseMove(object sender, WpfMouseEventArgs e)
@@ -388,6 +523,7 @@ public partial class MainWindow : Window
         {
             RestoreDraggedTabVisual();
             ResetDragPreview();
+            ResetAddressBarTimer();
         }
     }
 
@@ -501,6 +637,12 @@ public partial class MainWindow : Window
         {
             Owner = this
         };
+        _extensionPopupCount++;
+        popup.Closed += (_, _) =>
+        {
+            _extensionPopupCount = Math.Max(0, _extensionPopupCount - 1);
+            ResetAddressBarTimer();
+        };
         popup.Show();
     }
 
@@ -548,6 +690,7 @@ public partial class MainWindow : Window
                 return;
             }
             _watchdogTimer.Stop();
+            _addressBarTimer.Stop();
             _tray?.Dispose();
             _audioLabeler?.Dispose();
             if (_tabManager is not null) await _tabManager.DisposeAsync();

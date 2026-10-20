@@ -20,6 +20,11 @@
     <Content Include="FoxBrowser.ico" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Update="TabShrinkPanel.cs">
+      <SubType>Code</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
     <None Include="FoxBrowser.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

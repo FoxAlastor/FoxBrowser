@@ -1,7 +1,8 @@
 <Window x:Class="FoxBrowser.UI.ShortcutSettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Клавіатурні скорочення" Width="580" Height="330"
+        xmlns:local="clr-namespace:FoxBrowser.UI"
+        Title="Клавіатурні скорочення" Width="580" Height="390"
         MinWidth="520" Background="#15171A" Foreground="#F2F4F7"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
     <Grid Margin="20">
@@ -10,12 +11,8 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <TextBlock Text="Клавіатурні скорочення" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8" />
-        <TextBlock Grid.Row="0" Text="Натисніть «Змінити», потім потрібну комбінацію Ctrl/Shift/Alt + клавіша." Foreground="#AEB4BE" Margin="0,30,0,12" />
-        <StackPanel x:Name="ShortcutList" Grid.Row="1" />
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-            <Button Content="Скинути до стандартних" Click="Reset_Click" Padding="10,6" Margin="0,0,8,0" />
-            <Button Content="Закрити" Click="Close_Click" Padding="14,6" />
-        </StackPanel>
+        <TextBlock Text="Клавіатурні скорочення" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14" />
+        <local:ShortcutsPanel Grid.Row="1" />
+        <Button Grid.Row="2" Content="Закрити" Click="Close_Click" Padding="14,6" HorizontalAlignment="Right" Margin="0,14,0,0" />
     </Grid>
 </Window>

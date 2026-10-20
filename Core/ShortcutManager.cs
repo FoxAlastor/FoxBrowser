@@ -9,6 +9,9 @@ public sealed class ShortcutManager
     public const string CloseTab = "CloseTab";
     public const string NewTab = "NewTab";
     public const string ToggleTopPanel = "ToggleTopPanel";
+    public const string ToggleAddressBar = "ToggleAddressBar";
+
+    public static IReadOnlyList<string> AllActions { get; } = new[] { CloseTab, NewTab, ToggleTopPanel, ToggleAddressBar };
 
     private static readonly IReadOnlyDictionary<string, KeyGesture> Defaults =
         new Dictionary<string, KeyGesture>
@@ -16,6 +19,7 @@ public sealed class ShortcutManager
             [CloseTab] = new(Key.W, ModifierKeys.Control),
             [NewTab] = new(Key.N, ModifierKeys.Control),
             [ToggleTopPanel] = new(Key.F, ModifierKeys.Control | ModifierKeys.Shift),
+            [ToggleAddressBar] = new(Key.A, ModifierKeys.Control | ModifierKeys.Shift),
         };
 
     private static readonly Lazy<ShortcutManager> LazyInstance = new(() => new ShortcutManager());
@@ -51,6 +55,7 @@ public sealed class ShortcutManager
     public void ResetToDefaults()
     {
         ResetToDefaults(save: true);
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public static string GetActionLabel(string action) => action switch
@@ -58,6 +63,7 @@ public sealed class ShortcutManager
         CloseTab => "Закрити вкладку",
         NewTab => "Нова вкладка",
         ToggleTopPanel => "Показати/сховати верхню панель",
+        ToggleAddressBar => "Показати/сховати адресну панель",
         _ => action,
     };
 
@@ -89,7 +95,9 @@ public sealed class ShortcutManager
         foreach (var pair in settings.Shortcuts)
         {
             if (!Defaults.ContainsKey(pair.Key)) continue;
-            if (TryParse(pair.Value, out var gesture)) _shortcuts[pair.Key] = gesture!;
+            if (TryParse(pair.Value, out var gesture) &&
+                !_shortcuts.Any(existing => !string.Equals(existing.Key, pair.Key, StringComparison.Ordinal) && GesturesEqual(existing.Value, gesture!)))
+                _shortcuts[pair.Key] = gesture!;
         }
     }
 
