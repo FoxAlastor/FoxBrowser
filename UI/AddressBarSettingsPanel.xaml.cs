@@ -57,9 +57,11 @@ public partial class AddressBarSettingsPanel : System.Windows.Controls.UserContr
     private void Apply()
     {
         var seconds = int.TryParse(SecondsBox.Text, out var parsed) ? Math.Clamp(parsed, 2, 60) : 5;
-        _settings.AddressBarHideMode = TimerRadio.IsChecked == true ? "Timer" : "Manual";
-        _settings.AddressBarHideSeconds = seconds;
-        AppSettingsStore.Save(_settings);
+        _settings = AppSettingsStore.Update(settings =>
+        {
+            settings.AddressBarHideMode = TimerRadio.IsChecked == true ? "Timer" : "Manual";
+            settings.AddressBarHideSeconds = seconds;
+        });
         SettingsChanged?.Invoke(_settings);
     }
 

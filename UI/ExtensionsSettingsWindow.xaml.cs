@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using FoxBrowser.Core;
+using FoxBrowser.Native;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using Forms = System.Windows.Forms;
@@ -21,6 +22,7 @@ public partial class ExtensionsSettingsWindow : Window
     public ExtensionsSettingsWindow(ExtensionManager manager, CoreWebView2Environment environment, Func<string, Task> openUrl, bool extensionsAvailable)
     {
         InitializeComponent();
+        SourceInitialized += ExtensionsSettingsWindow_SourceInitialized;
         _manager = manager;
         _environment = environment;
         _openUrl = openUrl;
@@ -32,9 +34,37 @@ public partial class ExtensionsSettingsWindow : Window
         }
         Loaded += async (_, _) =>
         {
-            await _manager.RefreshAsync();
-            Dispatcher.Invoke(RefreshPinCheckboxes);
+            try
+            {
+                await _manager.RefreshAsync();
+                Dispatcher.Invoke(RefreshPinCheckboxes);
+            }
+            finally
+            {
+                RevealWindowAfterStartup();
+            }
         };
+    }
+
+    private void ExtensionsSettingsWindow_SourceInitialized(object? sender, EventArgs e)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        Win32Interop.ApplyDarkTitleBar(hwnd, true);
+        Win32Interop.SetWindowCaptionColor(hwnd, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF);
+        Win32Interop.SetWindowClassBackground(hwnd, 0x15, 0x17, 0x1A);
+        var source = HwndSource.FromHwnd(hwnd);
+        if (source?.CompositionTarget is not null)
+            source.CompositionTarget.BackgroundColor = System.Windows.Media.Color.FromRgb(0x15, 0x17, 0x1A);
+        Win32Interop.SetWindowCloaked(hwnd, true);
+    }
+
+    private void RevealWindowAfterStartup()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() =>
+        {
+            Win32Interop.SetWindowCloaked(hwnd, false);
+        }));
     }
 
     private async void Add_Click(object sender, RoutedEventArgs e)

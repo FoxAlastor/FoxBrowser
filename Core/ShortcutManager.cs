@@ -10,8 +10,9 @@ public sealed class ShortcutManager
     public const string NewTab = "NewTab";
     public const string ToggleTopPanel = "ToggleTopPanel";
     public const string ToggleAddressBar = "ToggleAddressBar";
+    public const string OpenDownloads = "OpenDownloads";
 
-    public static IReadOnlyList<string> AllActions { get; } = new[] { CloseTab, NewTab, ToggleTopPanel, ToggleAddressBar };
+    public static IReadOnlyList<string> AllActions { get; } = new[] { CloseTab, NewTab, ToggleTopPanel, ToggleAddressBar, OpenDownloads };
 
     private static readonly IReadOnlyDictionary<string, KeyGesture> Defaults =
         new Dictionary<string, KeyGesture>
@@ -20,6 +21,7 @@ public sealed class ShortcutManager
             [NewTab] = new(Key.N, ModifierKeys.Control),
             [ToggleTopPanel] = new(Key.F, ModifierKeys.Control | ModifierKeys.Shift),
             [ToggleAddressBar] = new(Key.A, ModifierKeys.Control | ModifierKeys.Shift),
+            [OpenDownloads] = new(Key.J, ModifierKeys.Control),
         };
 
     private static readonly Lazy<ShortcutManager> LazyInstance = new(() => new ShortcutManager());
@@ -64,6 +66,7 @@ public sealed class ShortcutManager
         NewTab => "Нова вкладка",
         ToggleTopPanel => "Показати/сховати верхню панель",
         ToggleAddressBar => "Показати/сховати адресну панель",
+        OpenDownloads => "Завантаження",
         _ => action,
     };
 
@@ -103,9 +106,8 @@ public sealed class ShortcutManager
 
     private void Save()
     {
-        var settings = AppSettingsStore.Load();
-        settings.Shortcuts = _shortcuts.ToDictionary(pair => pair.Key, pair => Format(pair.Value));
-        AppSettingsStore.Save(settings);
+        var shortcuts = _shortcuts.ToDictionary(pair => pair.Key, pair => Format(pair.Value));
+        AppSettingsStore.Update(settings => settings.Shortcuts = shortcuts);
     }
 
     private void ResetToDefaults(bool save)

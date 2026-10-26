@@ -11,11 +11,19 @@ public sealed class AppSettings
     public Dictionary<string, string> Shortcuts { get; set; } = new();
     public string AddressBarHideMode { get; set; } = "Manual";
     public int AddressBarHideSeconds { get; set; } = 5;
+    public double? WindowLeft { get; set; }
+    public double? WindowTop { get; set; }
+    public double? WindowWidth { get; set; }
+    public double? WindowHeight { get; set; }
+    public bool WindowMaximized { get; set; }
+    public bool RememberTopPanelState { get; set; }
+    public bool TopPanelHidden { get; set; }
 }
 
 public static class AppSettingsStore
 {
     public static string SettingsPath => Path.Combine(AppContext.BaseDirectory, "settings.json");
+    private static readonly object Gate = new();
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -45,9 +53,27 @@ public static class AppSettingsStore
 
     public static void Save(AppSettings settings)
     {
-        Directory.CreateDirectory(AppContext.BaseDirectory);
-        var tempPath = SettingsPath + ".tmp";
-        File.WriteAllText(tempPath, JsonSerializer.Serialize(settings, JsonOptions));
-        File.Move(tempPath, SettingsPath, overwrite: true);
+        lock (Gate)
+        {
+            Directory.CreateDirectory(AppContext.BaseDirectory);
+            var tempPath = SettingsPath + ".tmp";
+            File.WriteAllText(tempPath, JsonSerializer.Serialize(settings, JsonOptions));
+            File.Move(tempPath, SettingsPath, overwrite: true);
+        }
+    }
+
+    /// Load, mutate and save settings under one lock. Returns the current settings object.
+    public static AppSettings Update(Action<AppSettings> mutate)
+    {
+        lock (Gate)
+        {
+            var settings = Load();
+            mutate(settings);
+            Directory.CreateDirectory(AppContext.BaseDirectory);
+            var tempPath = SettingsPath + ".tmp";
+            File.WriteAllText(tempPath, JsonSerializer.Serialize(settings, JsonOptions));
+            File.Move(tempPath, SettingsPath, overwrite: true);
+            return settings;
+        }
     }
 }

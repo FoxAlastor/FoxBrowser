@@ -40,6 +40,9 @@ public partial class MainWindow : Window
     private bool _addressBarVisible = true;
     private int _extensionPopupCount;
     private readonly DispatcherTimer _addressBarTimer = new();
+    private readonly DispatcherTimer _geometrySaveTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    private bool _geometryReady;
+    private bool _startupContentRendered;
     private Popup? _tabContextPopup;
 
     private const int WmNcRButtonDown = 0x00A4;
@@ -50,18 +53,42 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _appSettings = AppSettingsStore.Load();
+        RestoreWindowGeometry(_appSettings);
+        if (_appSettings.RememberTopPanelState && _appSettings.TopPanelHidden)
+            SetTopPanelVisible(false);
         ApplyAppIdentity(_appSettings);
         _addressBarTimer.Tick += (_, _) => HideAddressBarIfAllowed();
+        _geometrySaveTimer.Tick += (_, _) =>
+        {
+            _geometrySaveTimer.Stop();
+            SaveWindowGeometry();
+        };
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         SourceInitialized += MainWindow_SourceInitialized;
+        ContentRendered += MainWindow_ContentRendered;
         Loaded += MainWindow_Loaded;
+        _geometryReady = true;
+        StartupTrace.Mark("MainWindow constructor completed");
     }
 
     private void MainWindow_SourceInitialized(object? sender, EventArgs e)
     {
+        StartupTrace.Mark("MainWindow_SourceInitialized");
         ApplyDarkTitleBar(true);
         var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+        var hwnd = new WindowInteropHelper(this).Handle;
+        Win32Interop.SetWindowClassBackground(hwnd, 0x0F, 0x12, 0x17);
+        if (source?.CompositionTarget is not null)
+            source.CompositionTarget.BackgroundColor = System.Windows.Media.Color.FromRgb(0x0F, 0x12, 0x17);
+        Win32Interop.SetWindowCloaked(hwnd, true);
         source?.AddHook(MainWindowWndProc);
+    }
+
+    private void MainWindow_ContentRendered(object? sender, EventArgs e)
+    {
+        if (_startupContentRendered) return;
+        _startupContentRendered = true;
+        StartupTrace.Mark("MainWindow_ContentRendered");
     }
 
     private IntPtr MainWindowWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -104,6 +131,17 @@ public partial class MainWindow : Window
             popup.IsOpen = false;
             ShowAddressBarFromMenu();
         };
+        var showTopPanelItem = new System.Windows.Controls.Button
+        {
+            Content = "Показати вкладки й адресну панель",
+            Style = (Style)FindResource("FoxMenuButton"),
+            Visibility = _topPanelVisible ? Visibility.Collapsed : Visibility.Visible
+        };
+        showTopPanelItem.Click += (_, _) =>
+        {
+            popup.IsOpen = false;
+            SetTopPanelVisible(true);
+        };
         var shortcutsItem = new System.Windows.Controls.Button
         {
             Content = "Клавіатурні скорочення…",
@@ -123,7 +161,7 @@ public partial class MainWindow : Window
             Padding = new Thickness(8),
             Child = new StackPanel
             {
-                Children = { item, shortcutsItem, showAddressItem }
+                Children = { item, shortcutsItem, showAddressItem, showTopPanelItem }
             }
         };
         popup.IsOpen = true;
@@ -164,6 +202,7 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        StartupTrace.Mark("MainWindow_Loaded started");
         try
         {
             _tray = new TrayIconManager(this, ExitApplication, ShowAddressBarFromMenu);
@@ -173,7 +212,7 @@ public partial class MainWindow : Window
             CoreWebView2Environment environment;
             try
             {
-                environment = await environmentFactory.CreateAsync();
+                environment = await App.EnvironmentTask;
             }
             catch (Exception ex) when ((uint)ex.HResult == 0x8007139Fu)
             {
@@ -185,6 +224,7 @@ public partial class MainWindow : Window
                 Directory.CreateDirectory(recoveryData);
                 environment = await environmentFactory.CreateAsync(recoveryData);
             }
+            StartupTrace.Mark("CoreWebView2Environment received");
             var startupNotice = environmentFactory.TakeStartupNotice();
             if (startupNotice is not null)
                 System.Windows.MessageBox.Show(this, startupNotice, "FoxBrowser", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -193,6 +233,10 @@ public partial class MainWindow : Window
             {
                 RefreshAddressBar();
                 RefreshModeIndicators();
+            });
+            _tabManager.ActiveDownloadsChanged += count => Dispatcher.Invoke(() =>
+            {
+                DownloadsButton.Content = count > 0 ? "⬇•" : "⬇";
             });
             DataContext = _tabManager;
             await _tabManager.InitializeAsync();
@@ -214,12 +258,23 @@ public partial class MainWindow : Window
             BrowserStatus.Visibility = Visibility.Collapsed;
             RefreshAddressBar();
             ApplyAddressBarSettings(_appSettings);
+            RevealWindowAfterStartup();
         }
         catch (Exception ex)
         {
             BrowserStatus.Text = $"WebView2 не запустився: {ex.Message}";
             BrowserStatus.Visibility = Visibility.Visible;
+            RevealWindowAfterStartup();
         }
+    }
+
+    private void RevealWindowAfterStartup()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() =>
+        {
+            Win32Interop.SetWindowCloaked(hwnd, false);
+        }));
     }
 
     private async void NewTab_Click(object sender, RoutedEventArgs e)
@@ -233,6 +288,20 @@ public partial class MainWindow : Window
         if (e.Key != Key.Enter) return;
         await NavigateFromAddressBarAsync();
         Keyboard.ClearFocus();
+    }
+
+    private void AddressBox_GotKeyboardFocus(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox textBox)
+            textBox.SelectAll();
+    }
+
+    private void AddressBox_PreviewMouseLeftButtonDown(object sender, WpfMouseEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox textBox || textBox.IsKeyboardFocusWithin) return;
+        e.Handled = true;
+        textBox.Focus();
+        textBox.SelectAll();
     }
 
     private async void Go_Click(object sender, RoutedEventArgs e) => await NavigateFromAddressBarAsync();
@@ -354,18 +423,39 @@ public partial class MainWindow : Window
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
-        var window = new SettingsWindow(_appSettings, ApplyAppIdentity, ApplyAddressBarSettings) { Owner = this };
+        var window = new SettingsWindow(_appSettings, ApplyAppIdentity, ApplyAddressBarSettings, () => _topPanelVisible, ApplyWindowSettings) { Owner = this };
         window.ShowDialog();
+    }
+
+    private void ApplyWindowSettings(AppSettings settings) => _appSettings = settings;
+
+    private void Downloads_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleDownloadsDialog();
+    }
+
+    private void ToggleDownloadsDialog()
+    {
+        var core = _tabManager?.View.CoreWebView2;
+        if (core is null) return;
+        if (core.IsDefaultDownloadDialogOpen) core.CloseDefaultDownloadDialog();
+        else core.OpenDefaultDownloadDialog();
     }
 
     private void ShowAddressBarFromMenu()
     {
-        if (!_topPanelVisible)
-        {
-            _topPanelVisible = true;
-            TopPanel.Visibility = Visibility.Visible;
-        }
+        SetTopPanelVisible(true);
         SetAddressBarVisibility(true);
+    }
+
+    private void SetTopPanelVisible(bool visible)
+    {
+        _topPanelVisible = visible;
+        TopPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        AddressHotStrip.Visibility = visible && !_addressBarVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (visible) ResetAddressBarTimer(); else _addressBarTimer.Stop();
+        if (_appSettings.RememberTopPanelState && _appSettings.TopPanelHidden == visible)
+            _appSettings = AppSettingsStore.Update(settings => settings.TopPanelHidden = !visible);
     }
 
     private void ApplyAddressBarSettings(AppSettings settings)
@@ -427,13 +517,13 @@ public partial class MainWindow : Window
                 RefreshAddressBar();
                 break;
             case ShortcutManager.ToggleTopPanel:
-                _topPanelVisible = !_topPanelVisible;
-                TopPanel.Visibility = _topPanelVisible ? Visibility.Visible : Visibility.Collapsed;
-                AddressHotStrip.Visibility = _topPanelVisible && !_addressBarVisible ? Visibility.Visible : Visibility.Collapsed;
-                if (_topPanelVisible) ResetAddressBarTimer(); else _addressBarTimer.Stop();
+                SetTopPanelVisible(!_topPanelVisible);
                 break;
             case ShortcutManager.ToggleAddressBar when _topPanelVisible:
                 SetAddressBarVisibility(!_addressBarVisible);
+                break;
+            case ShortcutManager.OpenDownloads:
+                ToggleDownloadsDialog();
                 break;
         }
     }
@@ -703,17 +793,97 @@ public partial class MainWindow : Window
 
     private async void Window_StateChanged(object? sender, EventArgs e)
     {
-        if (_tabManager is null) return;
         var minimized = WindowState == WindowState.Minimized;
         if (minimized) _tray?.MinimizeToTray();
-        await _tabManager.SetMinimizedModeAsync(minimized);
+        else ScheduleGeometrySave();
+        if (_tabManager is not null) await _tabManager.SetMinimizedModeAsync(minimized);
     }
+
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => ScheduleGeometrySave();
+
+    private void Window_LocationChanged(object? sender, EventArgs e) => ScheduleGeometrySave();
+
+    private void ScheduleGeometrySave()
+    {
+        if (!_geometryReady || WindowState == WindowState.Minimized || !IsVisible) return;
+        _geometrySaveTimer.Stop();
+        _geometrySaveTimer.Start();
+    }
+
+    private void SaveWindowGeometry()
+    {
+        if (WindowState == WindowState.Minimized || !IsVisible) return;
+        var bounds = WindowState == WindowState.Maximized ? RestoreBounds : new Rect(Left, Top, Width, Height);
+        if (!IsValidGeometry(bounds.Width, bounds.Height)) return;
+
+        var maximized = WindowState == WindowState.Maximized;
+        var changed = _appSettings.WindowLeft != bounds.Left ||
+                      _appSettings.WindowTop != bounds.Top ||
+                      _appSettings.WindowWidth != bounds.Width ||
+                      _appSettings.WindowHeight != bounds.Height ||
+                      _appSettings.WindowMaximized != maximized;
+        if (!changed) return;
+        _appSettings = AppSettingsStore.Update(settings =>
+        {
+            settings.WindowLeft = bounds.Left;
+            settings.WindowTop = bounds.Top;
+            settings.WindowWidth = bounds.Width;
+            settings.WindowHeight = bounds.Height;
+            settings.WindowMaximized = maximized;
+        });
+    }
+
+    private void RestoreWindowGeometry(AppSettings settings)
+    {
+        if (!settings.WindowLeft.HasValue || !settings.WindowTop.HasValue ||
+            !settings.WindowWidth.HasValue || !settings.WindowHeight.HasValue)
+            return;
+
+        var workArea = SystemParameters.WorkArea;
+        if (!IsValidGeometry(settings.WindowWidth.Value, settings.WindowHeight.Value) ||
+            double.IsNaN(settings.WindowLeft.Value) || double.IsInfinity(settings.WindowLeft.Value) ||
+            double.IsNaN(settings.WindowTop.Value) || double.IsInfinity(settings.WindowTop.Value))
+            return;
+        var width = Math.Clamp(settings.WindowWidth.Value, MinWidth, workArea.Width);
+        var height = Math.Clamp(settings.WindowHeight.Value, MinHeight, workArea.Height);
+        if (!IsValidGeometry(width, height)) return;
+
+        var left = settings.WindowLeft.Value;
+        var top = settings.WindowTop.Value;
+        var virtualLeft = SystemParameters.VirtualScreenLeft;
+        var virtualTop = SystemParameters.VirtualScreenTop;
+        var virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
+        var virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+        var intersectionWidth = Math.Max(0, Math.Min(left + width, virtualRight) - Math.Max(left, virtualLeft));
+        var intersectionHeight = Math.Max(0, Math.Min(top + height, virtualBottom) - Math.Max(top, virtualTop));
+        var visible = intersectionWidth >= 100 && intersectionHeight >= 50;
+
+        Width = width;
+        Height = height;
+        if (visible)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Left = left;
+            Top = top;
+        }
+        else
+        {
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+        if (settings.WindowMaximized && visible) WindowState = WindowState.Maximized;
+    }
+
+    private static bool IsValidGeometry(double width, double height) =>
+        !double.IsNaN(width) && !double.IsInfinity(width) && width > 0 &&
+        !double.IsNaN(height) && !double.IsInfinity(height) && height > 0;
 
     private async void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (!_allowClose)
         {
             e.Cancel = true;
+            _geometrySaveTimer.Stop();
+            SaveWindowGeometry();
             _tray?.MinimizeToTray();
             if (_tabManager is not null) await _tabManager.SetMinimizedModeAsync(true);
         }
@@ -727,6 +897,8 @@ public partial class MainWindow : Window
                 Close();
                 return;
             }
+            _geometrySaveTimer.Stop();
+            SaveWindowGeometry();
             _watchdogTimer.Stop();
             _addressBarTimer.Stop();
             _tray?.Dispose();

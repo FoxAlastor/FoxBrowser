@@ -27,6 +27,8 @@ public sealed class TabManager : IAsyncDisposable
     private bool _navigationInProgress;
     private bool _switchInProgress;
     private bool _restoringSession;
+    private bool _startupNavigationMarked;
+    private int _inProgressDownloads;
     private readonly string _blockedElementsPath = Path.Combine(AppContext.BaseDirectory, "blocked-elements.json");
     private readonly Dictionary<string, List<string>> _blockedElements;
 
@@ -35,7 +37,11 @@ public sealed class TabManager : IAsyncDisposable
         _host = host;
         _environment = environment;
         ExtensionsAvailable = extensionsAvailable;
-        _view = new WebView2 { Visibility = Visibility.Visible };
+        _view = new WebView2
+        {
+            Visibility = Visibility.Visible,
+            DefaultBackgroundColor = System.Drawing.Color.FromArgb(255, 0x0B, 0x0E, 0x12)
+        };
         _host.Children.Add(_view);
         _blockedElements = LoadBlockedElements();
     }
@@ -50,20 +56,25 @@ public sealed class TabManager : IAsyncDisposable
     public WebView2 View => _view;
     public ExtensionManager? ExtensionManager { get; private set; }
     public event EventHandler? ActiveTabStateChanged;
+    public event Action<int>? ActiveDownloadsChanged;
 
     public async Task InitializeAsync()
     {
         await _view.EnsureCoreWebView2Async(_environment);
+        StartupTrace.Mark("TabManager: EnsureCoreWebView2Async completed");
         try
         {
             ExtensionManager = new ExtensionManager(_view.CoreWebView2.Profile);
             await ExtensionManager.RefreshAsync();
+            StartupTrace.Mark("TabManager: ExtensionManager.RefreshAsync completed");
         }
         catch
         {
             ExtensionManager = null;
             ExtensionsAvailable = false;
         }
+        _view.CoreWebView2.DefaultDownloadDialogCornerAlignment = CoreWebView2DefaultDownloadDialogCornerAlignment.TopRight;
+        _view.CoreWebView2.DefaultDownloadDialogMargin = new System.Drawing.Point(12, 8);
         ConfigureResourceFirewall(_view.CoreWebView2);
         _view.CoreWebView2.NavigationStarting += OnNavigationStarting;
         _view.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
@@ -71,10 +82,12 @@ public sealed class TabManager : IAsyncDisposable
         _view.CoreWebView2.IsDocumentPlayingAudioChanged += OnAudioStateChanged;
         _view.CoreWebView2.HistoryChanged += OnHistoryChanged;
         _view.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+        _view.CoreWebView2.DownloadStarting += OnDownloadStarting;
         _restoringSession = true;
         try
         {
             await RestoreSessionOrDefaultAsync();
+            StartupTrace.Mark("TabManager: RestoreSessionOrDefaultAsync completed");
         }
         finally
         {
@@ -362,6 +375,11 @@ public sealed class TabManager : IAsyncDisposable
     {
         _navigationInProgress = false;
         if (ActiveTab is null) return;
+        if (!_startupNavigationMarked)
+        {
+            _startupNavigationMarked = true;
+            StartupTrace.Mark("First active-tab NavigationCompleted");
+        }
         ActiveTab.IsLoading = false;
         ActiveTab.Address = _view.Source?.ToString() ?? ActiveTab.Address;
         ActiveTab.Title = string.IsNullOrWhiteSpace(_view.CoreWebView2.DocumentTitle) ? "Нова вкладка" : _view.CoreWebView2.DocumentTitle;
@@ -391,6 +409,21 @@ public sealed class TabManager : IAsyncDisposable
         ActiveTab.Address = current;
         ActiveTabStateChanged?.Invoke(this, EventArgs.Empty);
         _ = SaveSessionAsync();
+    }
+
+    private void OnDownloadStarting(object? sender, CoreWebView2DownloadStartingEventArgs e)
+    {
+        var count = Interlocked.Increment(ref _inProgressDownloads);
+        ActiveDownloadsChanged?.Invoke(count);
+        var completed = false;
+        e.DownloadOperation.StateChanged += (_, _) =>
+        {
+            var state = e.DownloadOperation.State;
+            if (completed || (state != CoreWebView2DownloadState.Completed && state != CoreWebView2DownloadState.Interrupted)) return;
+            completed = true;
+            count = Interlocked.Decrement(ref _inProgressDownloads);
+            ActiveDownloadsChanged?.Invoke(count);
+        };
     }
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)

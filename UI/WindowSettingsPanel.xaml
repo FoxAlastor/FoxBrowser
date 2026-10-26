@@ -1,0 +1,22 @@
+<UserControl
+    x:Class="FoxBrowser.UI.WindowSettingsPanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <CheckBox
+            x:Name="RememberTopPanelCheck"
+            Margin="0,0,0,8"
+            Checked="RememberTopPanel_Changed"
+            Foreground="#F2F4F7"
+            Unchecked="RememberTopPanel_Changed">
+            <TextBlock
+                FontSize="13"
+                Text="Запам’ятовувати режим «без вкладок і адресного рядка»"
+                TextWrapping="Wrap" />
+        </CheckBox>
+        <TextBlock
+            x:Name="ShortcutHint"
+            Foreground="#AEB4BE"
+            TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

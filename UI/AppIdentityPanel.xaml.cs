@@ -54,10 +54,11 @@ public partial class AppIdentityPanel : System.Windows.Controls.UserControl
 
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
-        var settings = AppSettingsStore.Load();
-        settings.AppDisplayName = string.IsNullOrWhiteSpace(NameBox.Text) ? "FoxBrowser" : NameBox.Text.Trim();
-        settings.AppIconPath = _iconPath;
-        AppSettingsStore.Save(settings);
+        var settings = AppSettingsStore.Update(current =>
+        {
+            current.AppDisplayName = string.IsNullOrWhiteSpace(NameBox.Text) ? "FoxBrowser" : NameBox.Text.Trim();
+            current.AppIconPath = _iconPath;
+        });
         _apply?.Invoke(settings);
         Applied?.Invoke(this, EventArgs.Empty);
     }
