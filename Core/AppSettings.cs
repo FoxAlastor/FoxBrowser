@@ -18,6 +18,7 @@ public sealed class AppSettings
     public bool WindowMaximized { get; set; }
     public bool RememberTopPanelState { get; set; }
     public bool TopPanelHidden { get; set; }
+    public bool AddressBarHidden { get; set; }
 }
 
 public static class AppSettingsStore

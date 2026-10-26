@@ -54,8 +54,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         _appSettings = AppSettingsStore.Load();
         RestoreWindowGeometry(_appSettings);
-        if (_appSettings.RememberTopPanelState && _appSettings.TopPanelHidden)
-            SetTopPanelVisible(false);
+        RestoreTopPanelState();
+        RestoreAddressBarState();
         ApplyAppIdentity(_appSettings);
         _addressBarTimer.Tick += (_, _) => HideAddressBarIfAllowed();
         _geometrySaveTimer.Tick += (_, _) =>
@@ -203,6 +203,7 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         StartupTrace.Mark("MainWindow_Loaded started");
+        RestoreTopPanelState();
         try
         {
             _tray = new TrayIconManager(this, ExitApplication, ShowAddressBarFromMenu);
@@ -458,6 +459,18 @@ public partial class MainWindow : Window
             _appSettings = AppSettingsStore.Update(settings => settings.TopPanelHidden = !visible);
     }
 
+    private void RestoreTopPanelState()
+    {
+        if (!_appSettings.RememberTopPanelState) return;
+
+        var visible = !_appSettings.TopPanelHidden;
+        _topPanelVisible = visible;
+        TopPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        AddressHotStrip.Visibility = visible && !_addressBarVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (visible) ResetAddressBarTimer();
+        else _addressBarTimer.Stop();
+    }
+
     private void ApplyAddressBarSettings(AppSettings settings)
     {
         _appSettings = settings;
@@ -465,16 +478,24 @@ public partial class MainWindow : Window
         _appSettings.AddressBarHideSeconds = Math.Clamp(settings.AddressBarHideSeconds, 2, 60);
         _addressBarTimer.Stop();
         _addressBarTimer.Interval = TimeSpan.FromSeconds(_appSettings.AddressBarHideSeconds);
+        RestoreAddressBarState();
         if (_appSettings.AddressBarHideMode == "Timer") ResetAddressBarTimer();
     }
 
-    private void SetAddressBarVisibility(bool visible)
+    private void SetAddressBarVisibility(bool visible, bool persist = true)
     {
         _addressBarVisible = visible;
         AddressRow.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         AddressHotStrip.Visibility = !visible && _topPanelVisible ? Visibility.Visible : Visibility.Collapsed;
         if (visible) ResetAddressBarTimer();
         else _addressBarTimer.Stop();
+        if (persist && _appSettings.AddressBarHidden != !visible)
+            _appSettings = AppSettingsStore.Update(settings => settings.AddressBarHidden = !visible);
+    }
+
+    private void RestoreAddressBarState()
+    {
+        SetAddressBarVisibility(!_appSettings.AddressBarHidden, persist: false);
     }
 
     private void ResetAddressBarTimer()
@@ -492,7 +513,7 @@ public partial class MainWindow : Window
             ResetAddressBarTimer();
             return;
         }
-        SetAddressBarVisibility(false);
+        SetAddressBarVisibility(false, persist: false);
     }
 
     private void AddressRow_MouseMove(object sender, WpfMouseEventArgs e) => ResetAddressBarTimer();
