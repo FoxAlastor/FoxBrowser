@@ -290,6 +290,7 @@
                         </Border>
                     </Popup>
                     <Button Content="♫" ToolTip="Режим лише аудіо" Click="AudioOnly_Click" Height="32" Width="36" Padding="0" Margin="0,0,4,0" />
+                    <Button x:Name="PipButton" Content="⧉" ToolTip="Картинка в картинці" Click="Pip_Click" Height="32" Width="36" Padding="0" Margin="0,0,4,0" />
                     <Button x:Name="DownloadsButton" Content="⬇" ToolTip="Завантаження" Click="Downloads_Click" Height="32" Width="36" Padding="0" Margin="0,0,4,0" />
                     <Button Content="Розширення" ToolTip="Керування unpacked extensions" Click="Extensions_Click" Height="32" Padding="11,0" />
                     <Button Content="⚙" ToolTip="Налаштування" Click="Settings_Click" Height="32" Width="36" Padding="0" Margin="4,0,0,0" />

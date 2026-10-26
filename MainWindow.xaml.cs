@@ -44,6 +44,8 @@ public partial class MainWindow : Window
     private bool _geometryReady;
     private bool _startupContentRendered;
     private Popup? _tabContextPopup;
+    private DispatcherTimer? _pipToolTipTimer;
+    private System.Windows.Controls.ToolTip? _pipToolTip;
 
     private const int WmNcRButtonDown = 0x00A4;
     private const int WmNcRButtonUp = 0x00A5;
@@ -314,6 +316,31 @@ public partial class MainWindow : Window
         TabStrip.Items.Refresh();
     }
 
+    private async void Pip_Click(object sender, RoutedEventArgs e) => await TogglePictureInPictureFromUiAsync();
+
+    private async Task TogglePictureInPictureFromUiAsync()
+    {
+        if (_tabManager is null) return;
+        var text = await _tabManager.TogglePictureInPictureAsync();
+        _pipToolTipTimer?.Stop();
+        if (_pipToolTip is not null) _pipToolTip.IsOpen = false;
+        _pipToolTip = new System.Windows.Controls.ToolTip
+        {
+            Content = text,
+            PlacementTarget = PipButton,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            IsOpen = true
+        };
+        _pipToolTipTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _pipToolTipTimer.Tick += (_, _) =>
+        {
+            _pipToolTipTimer?.Stop();
+            if (_pipToolTip is not null) _pipToolTip.IsOpen = false;
+            _pipToolTip = null;
+        };
+        _pipToolTipTimer.Start();
+    }
+
     private async void DarkMode_Click(object sender, RoutedEventArgs e)
     {
         DarkModePopup.IsOpen = false;
@@ -545,6 +572,9 @@ public partial class MainWindow : Window
                 break;
             case ShortcutManager.OpenDownloads:
                 ToggleDownloadsDialog();
+                break;
+            case ShortcutManager.TogglePictureInPicture:
+                await TogglePictureInPictureFromUiAsync();
                 break;
         }
     }
@@ -815,8 +845,7 @@ public partial class MainWindow : Window
     private async void Window_StateChanged(object? sender, EventArgs e)
     {
         var minimized = WindowState == WindowState.Minimized;
-        if (minimized) _tray?.MinimizeToTray();
-        else ScheduleGeometrySave();
+        if (!minimized) ScheduleGeometrySave();
         if (_tabManager is not null) await _tabManager.SetMinimizedModeAsync(minimized);
     }
 
@@ -928,7 +957,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ExitApplication()
+    internal void ExitApplication()
     {
         _allowClose = true;
         Close();

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
@@ -319,13 +320,89 @@ public sealed class TabManager : IAsyncDisposable
         await ApplyLightweightPageModeAsync(enabled || _audioOnly);
     }
 
+    public async Task<string> TogglePictureInPictureAsync()
+    {
+        var core = _view.CoreWebView2;
+        if (core is null) return "Не вдалося: WebView2 ще не готовий";
+        if (_audioOnly || _minimizedMode)
+        {
+            var currentPiP = await IsPictureInPictureActiveAsync();
+            if (!currentPiP) return "Вимкніть режим лише аудіо, щоб скористатися PiP";
+        }
+
+        const string script = """
+          (async()=>{
+            try{
+              if(!document.pictureInPictureEnabled)return {ok:false,state:'unsupported'};
+              if(document.pictureInPictureElement){await document.exitPictureInPicture();return {ok:true,state:'exited'};}
+              const videos=[...document.querySelectorAll('video')].filter(v=>{
+                const r=v.getBoundingClientRect(),s=getComputedStyle(v);
+                return v.readyState>=2&&r.width>1&&r.height>1&&s.display!=='none'&&s.visibility!=='hidden';
+              }).sort((a,b)=>(Number(!b.paused)-Number(!a.paused))||(b.getBoundingClientRect().width*b.getBoundingClientRect().height-a.getBoundingClientRect().width*a.getBoundingClientRect().height));
+              const v=videos[0];
+              if(!v)return {ok:false,state:'no-video'};
+              v.disablePictureInPicture=false;v.removeAttribute('disablepictureinpicture');
+              await v.requestPictureInPicture();
+              return {ok:true,state:'entered'};
+            }catch(e){return {ok:false,state:'error',message:(e?.name||'Error')+': '+(e?.message||String(e))};}
+          })()
+          """;
+        try
+        {
+            var args = JsonSerializer.Serialize(new { expression = script, userGesture = true, awaitPromise = true, returnByValue = true });
+            var evaluationTask = core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", args);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var completed = await Task.WhenAny(evaluationTask, Task.Delay(Timeout.InfiniteTimeSpan, timeout.Token));
+            if (completed != evaluationTask) return "Не вдалося: час очікування вичерпано";
+            var raw = await evaluationTask;
+            using var document = JsonDocument.Parse(raw);
+            if (!document.RootElement.TryGetProperty("result", out var result))
+                return "Не вдалося: WebView2 не повернув результат";
+            if (result.TryGetProperty("exceptionDetails", out var exceptionDetails))
+                return $"Не вдалося: {GetDevToolsError(exceptionDetails)}";
+            if (!result.TryGetProperty("result", out var valueResult) ||
+                !valueResult.TryGetProperty("value", out var value))
+                return "Не вдалося: WebView2 не повернув результат";
+            var state = value.TryGetProperty("state", out var stateElement) ? stateElement.GetString() : null;
+            return state switch
+            {
+                "entered" => "PiP увімкнено",
+                "exited" => "PiP вимкнено",
+                "no-video" => "Відео на сторінці не знайдено",
+                "unsupported" => "Цей сайт або відео не підтримують PiP",
+                "error" => $"Не вдалося: {(value.TryGetProperty("message", out var message) ? message.GetString() : "невідома помилка")}",
+                _ => "Не вдалося: невідомий результат PiP"
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            return "Не вдалося: час очікування вичерпано";
+        }
+        catch (JsonException)
+        {
+            return "Не вдалося: пошкоджена відповідь WebView2";
+        }
+        catch (Exception ex)
+        {
+            return $"Не вдалося: {ex.Message}";
+        }
+    }
+
     public async Task SoftReloadIfNeededAsync(long thresholdBytes = 850L * 1024 * 1024)
     {
         using var process = Process.GetCurrentProcess();
         if (process.WorkingSet64 < thresholdBytes || ActiveTab is null || _navigationInProgress) return;
+        var core = _view.CoreWebView2;
+        if (core is null) return;
+        try
+        {
+            var pip = await core.ExecuteScriptAsync("!!document.pictureInPictureElement");
+            if (string.Equals(pip, "\"true\"", StringComparison.OrdinalIgnoreCase)) return;
+        }
+        catch { }
         await CaptureActiveStateAsync();
         _navigationInProgress = true;
-        _view.CoreWebView2?.Navigate(ActiveTab.Address);
+        core.Navigate(ActiveTab.Address);
     }
 
     public void GoBack() { var core = _view.CoreWebView2; if (core?.CanGoBack == true) core.GoBack(); }
@@ -585,7 +662,7 @@ public sealed class TabManager : IAsyncDisposable
         if (_view.CoreWebView2 is null) return;
         var script = enabled
             ? """
-              (()=>{let s=document.getElementById('fox-lightweight');if(!s){s=document.createElement('style');s.id='fox-lightweight';s.textContent='img,picture,svg,canvas{display:none!important}video{width:1px!important;height:1px!important;opacity:0!important;position:fixed!important;left:-10000px!important;top:-10000px!important}';document.documentElement.appendChild(s)};document.querySelectorAll('link[rel="preload"],link[rel="prefetch"],link[rel="next"]').forEach(x=>x.remove());})();
+              (()=>{let s=document.getElementById('fox-lightweight');if(!s){s=document.createElement('style');s.id='fox-lightweight';s.textContent='img,picture,svg,canvas{display:none!important}video:not(:picture-in-picture){width:1px!important;height:1px!important;opacity:0!important;position:fixed!important;left:-10000px!important;top:-10000px!important}';document.documentElement.appendChild(s)};document.querySelectorAll('link[rel="preload"],link[rel="prefetch"],link[rel="next"]').forEach(x=>x.remove());})();
               """
             : "document.getElementById('fox-lightweight')?.remove();";
         await _view.CoreWebView2.ExecuteScriptAsync(script);
@@ -620,11 +697,91 @@ public sealed class TabManager : IAsyncDisposable
         try { await _view.CoreWebView2.ExecuteScriptAsync(script); } catch { }
     }
 
+    private async Task<bool> IsPictureInPictureActiveAsync()
+    {
+        try
+        {
+            var raw = await _view.CoreWebView2!.ExecuteScriptAsync("!!document.pictureInPictureElement");
+            return string.Equals(raw, "\"true\"", StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    private static string GetDevToolsError(JsonElement details)
+    {
+        if (details.TryGetProperty("exception", out var exception) && exception.TryGetProperty("description", out var description))
+            return description.GetString() ?? "помилка виконання";
+        return details.TryGetProperty("text", out var text) ? text.GetString() ?? "помилка виконання" : "помилка виконання";
+    }
+
     private static string NormalizeAddress(string value)
     {
         var text = value.Trim();
         if (string.IsNullOrEmpty(text)) return "https://www.google.com";
-        if (Uri.TryCreate(text, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)) return text;
-        return $"https://www.google.com/search?q={Uri.EscapeDataString(text)}";
+
+        var explicitPrefixes = new[] { "http://", "https://", "file://", "about:", "chrome-extension://", "edge://" };
+        if (explicitPrefixes.Any(prefix => text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !text.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return text;
+            return Uri.TryCreate(text, UriKind.Absolute, out var explicitUri) &&
+                   (explicitUri.Scheme == Uri.UriSchemeHttp || explicitUri.Scheme == Uri.UriSchemeHttps)
+                ? text
+                : ToSearch(text);
+        }
+
+        if (text.Contains(' ') || text.Contains('\n') || text.Contains('\r')) return ToSearch(text);
+        var boundary = text.IndexOfAny(new[] { '/', '?', '#' });
+        var hostPort = boundary >= 0 ? text[..boundary] : text;
+        if (string.IsNullOrWhiteSpace(hostPort) || hostPort.Contains("@", StringComparison.Ordinal)) return ToSearch(text);
+        var host = hostPort;
+        var port = 0;
+        if (hostPort.StartsWith("[", StringComparison.Ordinal))
+        {
+            var close = hostPort.IndexOf(']');
+            if (close < 0) return ToSearch(text);
+            host = hostPort[..(close + 1)];
+            var suffix = hostPort[(close + 1)..];
+            if (!string.IsNullOrEmpty(suffix) && !TryParsePort(suffix, out port)) return ToSearch(text);
+        }
+        else
+        {
+            var colon = hostPort.LastIndexOf(':');
+            if (colon >= 0)
+            {
+                host = hostPort[..colon];
+                if (!TryParsePort(hostPort[colon..], out port)) return ToSearch(text);
+            }
+        }
+        if (string.IsNullOrWhiteSpace(host)) return ToSearch(text);
+        var normalizedHost = host.Trim('[', ']');
+        var isIpv6 = host.StartsWith("[", StringComparison.Ordinal) && host.EndsWith(']');
+        var isIpv4 = System.Net.IPAddress.TryParse(normalizedHost, out var address) &&
+                     address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
+                     normalizedHost.Split('.').Length == 4;
+        if (normalizedHost.Equals("localhost", StringComparison.OrdinalIgnoreCase) || isIpv4 || isIpv6 || normalizedHost.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
+            return $"http://{text}";
+        if (host.Contains(".", StringComparison.Ordinal) && !host.EndsWith(".", StringComparison.Ordinal))
+        {
+            var labels = host.Split('.');
+            var suffix = labels[^1];
+            var suffixLooksValid = suffix.StartsWith("xn--", StringComparison.OrdinalIgnoreCase) ||
+                                   suffix.Length is >= 2 and <= 24 && suffix.All(char.IsLetter);
+            try
+            {
+                var ascii = new System.Globalization.IdnMapping().GetAscii(host);
+                if (suffixLooksValid && Uri.CheckHostName(ascii) == UriHostNameType.Dns) return $"https://{text}";
+            }
+            catch (ArgumentException) { }
+        }
+        return ToSearch(text);
     }
+
+    private static bool TryParsePort(string value, out int port)
+    {
+        port = 0;
+        if (string.IsNullOrEmpty(value) || value[0] != ':' || !int.TryParse(value[1..], out port)) return false;
+        return port is >= 1 and <= 65535;
+    }
+
+    private static string ToSearch(string text) => $"https://www.google.com/search?q={Uri.EscapeDataString(text)}";
 }

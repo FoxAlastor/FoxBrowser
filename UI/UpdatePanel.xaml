@@ -1,0 +1,20 @@
+<UserControl x:Class="FoxBrowser.UI.UpdatePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent">
+    <StackPanel>
+        <TextBlock x:Name="CurrentVersionText" Foreground="#AEB4BE" Margin="0,0,0,8" />
+        <StackPanel Orientation="Horizontal">
+            <Button x:Name="CheckButton" Content="Перевірити оновлення" Click="Check_Click" Padding="12,6" />
+            <Button x:Name="InstallButton" Content="Завантажити та встановити" Click="Install_Click" Padding="12,6" Margin="8,0,0,0" IsEnabled="False" />
+        </StackPanel>
+        <TextBlock x:Name="StatusText" Foreground="#AEB4BE" TextWrapping="Wrap" Margin="0,10,0,0" />
+        <TextBlock Text="Що нового" Foreground="#F2F4F7" FontWeight="SemiBold" Margin="0,12,0,4" />
+        <TextBlock x:Name="NotesText" Foreground="#AEB4BE" TextWrapping="Wrap" MaxHeight="120" />
+        <ProgressBar x:Name="DownloadProgress" Height="8" Margin="0,12,0,0" Visibility="Collapsed" Minimum="0" Maximum="1" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="ReleaseButton" Content="Відкрити сторінку релізу" Click="Release_Click" Padding="10,5" IsEnabled="False" />
+            <Button x:Name="CancelButton" Content="Скасувати" Click="Cancel_Click" Padding="10,5" Margin="8,0,0,0" Visibility="Collapsed" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

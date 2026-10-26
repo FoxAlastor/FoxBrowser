@@ -11,8 +11,9 @@ public sealed class ShortcutManager
     public const string ToggleTopPanel = "ToggleTopPanel";
     public const string ToggleAddressBar = "ToggleAddressBar";
     public const string OpenDownloads = "OpenDownloads";
+    public const string TogglePictureInPicture = "TogglePictureInPicture";
 
-    public static IReadOnlyList<string> AllActions { get; } = new[] { CloseTab, NewTab, ToggleTopPanel, ToggleAddressBar, OpenDownloads };
+    public static IReadOnlyList<string> AllActions { get; } = new[] { CloseTab, NewTab, ToggleTopPanel, ToggleAddressBar, OpenDownloads, TogglePictureInPicture };
 
     private static readonly IReadOnlyDictionary<string, KeyGesture> Defaults =
         new Dictionary<string, KeyGesture>
@@ -22,6 +23,7 @@ public sealed class ShortcutManager
             [ToggleTopPanel] = new(Key.F, ModifierKeys.Control | ModifierKeys.Shift),
             [ToggleAddressBar] = new(Key.A, ModifierKeys.Control | ModifierKeys.Shift),
             [OpenDownloads] = new(Key.J, ModifierKeys.Control),
+            [TogglePictureInPicture] = new(Key.P, ModifierKeys.Control | ModifierKeys.Shift),
         };
 
     private static readonly Lazy<ShortcutManager> LazyInstance = new(() => new ShortcutManager());
@@ -67,6 +69,7 @@ public sealed class ShortcutManager
         ToggleTopPanel => "Показати/сховати верхню панель",
         ToggleAddressBar => "Показати/сховати адресну панель",
         OpenDownloads => "Завантаження",
+        TogglePictureInPicture => "Картинка в картинці",
         _ => action,
     };
 
